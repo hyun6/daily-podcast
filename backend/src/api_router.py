@@ -18,11 +18,17 @@ web_fetcher = WebFetcher()
 youtube_fetcher = YouTubeFetcher()
 
 # Use Mock client for dev unless API key is set
-if settings.ENV == "development" and settings.GEMINI_API_KEY == "your_api_key_here":
-    print("Using Mock Gemini Client")
+# Use Mock client if API key is not set or default
+if not settings.GEMINI_API_KEY or settings.GEMINI_API_KEY.startswith("your_api_key") or settings.GEMINI_API_KEY == "TODO":
+    print("WARNING: Using Mock Gemini Client (Valid GEMINI_API_KEY not found)")
     llm_client = MockGeminiClient()
 else:
-    llm_client = GeminiClient()
+    print("Using Real Gemini Client")
+    try:
+        llm_client = GeminiClient()
+    except Exception as e:
+        print(f"Error initializing Gemini Client, falling back to Mock: {e}")
+        llm_client = MockGeminiClient()
 
 tts_engine = TTSEngine()
 

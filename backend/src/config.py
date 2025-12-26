@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     ENV: Literal["development", "production"] = "development"
 
     # API Keys & External Services
-    GEMINI_API_KEY: str = Field(..., description="Google Gemini API Key")
+    GEMINI_API_KEY: str = Field("TODO", description="Google Gemini API Key")
     
     # Paths
     DATA_DIR: str = "data"

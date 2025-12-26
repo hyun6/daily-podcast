@@ -7,7 +7,15 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description="Backend API for Daily AI Podcast Generator"
 )
+from fastapi.middleware.cors import CORSMiddleware
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # For development, allow all. In production, be specific.
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 from fastapi.staticfiles import StaticFiles
 import os
 
