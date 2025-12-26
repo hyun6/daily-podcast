@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     DOWNLOADS_DIR: str = "downloads"
 
     # Audio Configuration
-    TTS_ENGINE: Literal["edge-tts", "openai", "elevenlabs"] = Field(
+    TTS_ENGINE: Literal["edge-tts", "openai", "elevenlabs", "chatterbox"] = Field(
         default="edge-tts", 
         description="Text-to-Speech Engine to use"
     )

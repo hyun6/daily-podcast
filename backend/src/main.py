@@ -8,7 +8,14 @@ app = FastAPI(
     description="Backend API for Daily AI Podcast Generator"
 )
 
+from fastapi.staticfiles import StaticFiles
+import os
+
 app.include_router(api_router, prefix="/api/v1")
+
+# Ensure downloads directory exists
+os.makedirs(settings.DOWNLOADS_DIR, exist_ok=True)
+app.mount("/downloads", StaticFiles(directory=settings.DOWNLOADS_DIR), name="downloads")
 
 @app.get("/")
 def read_root():
