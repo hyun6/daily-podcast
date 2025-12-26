@@ -37,25 +37,35 @@ async def generate_episode(request: ProcessingRequest):
     """
     Generate a podcast episode from the provided sources.
     """
+    print(f"[DEBUG] Received request: sources={len(request.sources)}, tts_engine={request.tts_engine}")
+    for i, src in enumerate(request.sources):
+        print(f"[DEBUG] Source {i}: type={src.source_type}, url={src.url}, name={src.name}")
+    
     full_text = ""
     source_names = []
     
     # 1. Fetch Content
     for source in request.sources:
         content = None
-        if source.source_type == 'rss':
-            content = rss_fetcher.fetch(str(source.url))
-        elif source.source_type == 'web':
-            content = web_fetcher.fetch(str(source.url))
-        elif source.source_type == 'youtube':
-            content = youtube_fetcher.fetch(str(source.url))
+        try:
+            if source.source_type == 'rss':
+                content = rss_fetcher.fetch(str(source.url))
+            elif source.source_type == 'web':
+                content = web_fetcher.fetch(str(source.url))
+            elif source.source_type == 'youtube':
+                content = youtube_fetcher.fetch(str(source.url))
+            else:
+                print(f"[WARN] Unknown source_type: {source.source_type}")
+        except Exception as e:
+            print(f"[ERROR] Failed to fetch {source.url}: {e}")
         
         if content:
             full_text += f"\n\nSource: {source.name or source.url}\n{content}"
             source_names.append(source.name or str(source.url))
     
     if not full_text:
-        raise HTTPException(status_code=400, detail="Failed to fetch any content from sources.")
+        print("[ERROR] Failed to fetch any content from sources.")
+        raise HTTPException(status_code=400, detail="Failed to fetch any content from sources. Check your URLs and source types.")
 
     # 2. Generate Script
     script = llm_client.generate_script(full_text)
@@ -64,7 +74,8 @@ async def generate_episode(request: ProcessingRequest):
 
     # 3. Generate Audio
     try:
-        audio_path = await tts_engine.generate_audio(script)
+        audio_path, engine_used = await tts_engine.generate_audio(script, tts_engine=request.tts_engine)
+        print(f"[INFO] Audio generated using: {engine_used}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Audio generation failed: {str(e)}")
 
@@ -75,10 +86,11 @@ async def generate_episode(request: ProcessingRequest):
         file_path=audio_path,
         metadata=PodcastMetadata(
             title=script.title,
-            duration_seconds=0.0, # TOOD: Calculate duration
+            duration_seconds=0.0, # TODO: Calculate duration
             sources=source_names,
             created_at=datetime.now()
-        )
+        ),
+        tts_engine_used=engine_used
     )
 
 @router.get("/episodes")

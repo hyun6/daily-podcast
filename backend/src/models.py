@@ -12,6 +12,7 @@ class ContentSource(BaseModel):
 class ProcessingRequest(BaseModel):
     sources: List[ContentSource]
     force_refresh: bool = False
+    tts_engine: Optional[str] = None # 'edge-tts' or 'chatterbox'
 
 # --- Script Models ---
 
@@ -36,3 +37,4 @@ class PodcastMetadata(BaseModel):
 class PodcastEpisode(BaseModel):
     file_path: str
     metadata: PodcastMetadata
+    tts_engine_used: Optional[str] = None  # Actual engine used (may differ if fallback occurred)

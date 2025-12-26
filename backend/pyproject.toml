@@ -22,4 +22,5 @@ dependencies = [
     "setuptools>=80.9.0",
     "uvicorn>=0.40.0",
     "youtube-transcript-api>=1.2.3",
+    "onnx>=1.14.0,<1.17.0",
 ]

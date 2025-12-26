@@ -10,7 +10,10 @@ class RealPodcastRepository implements PodcastRepository {
     : _dio = Dio(BaseOptions(baseUrl: baseUrl));
 
   @override
-  Future<Podcast> generatePodcast(List<Source> sources) async {
+  Future<Podcast> generatePodcast(
+    List<Source> sources, {
+    String? ttsEngine,
+  }) async {
     try {
       final response = await _dio.post(
         '/api/v1/generate',
@@ -18,6 +21,7 @@ class RealPodcastRepository implements PodcastRepository {
           "sources": sources
               .map((s) => {"source_type": s.type, "url": s.url, "name": s.name})
               .toList(),
+          "tts_engine": ttsEngine,
         },
       );
 
@@ -42,6 +46,7 @@ class RealPodcastRepository implements PodcastRepository {
         filePath:
             "${baseUrl.replaceAll("/api/v1", "")}/${data['file_path']}", // Assuming file is served statically or via another endpoint
         metadata: metadata,
+        ttsEngineUsed: data['tts_engine_used'],
       );
     } catch (e) {
       throw Exception('Failed to generate podcast: $e');

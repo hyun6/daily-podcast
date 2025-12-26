@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/podcast.dart';
 import '../providers/podcast_provider.dart';
+import 'player_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -61,6 +62,20 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (provider.error != null)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.shade300),
+                    ),
+                    child: Text(
+                      provider.error!,
+                      style: TextStyle(color: Colors.red.shade900),
+                    ),
+                  ),
                 DropdownButtonFormField<String>(
                   value: _selectedType,
                   decoration: const InputDecoration(labelText: 'Source Type'),
@@ -120,8 +135,18 @@ class _HomeScreenState extends State<HomeScreen> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        // TODO: Tap to play
-                        onTap: () {},
+                        // Navigate to PlayerScreen
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => PlayerScreen(
+                                audioPath: podcast.filePath,
+                                title: podcast.metadata.title,
+                              ),
+                            ),
+                          );
+                        },
                       );
                     },
                   ),

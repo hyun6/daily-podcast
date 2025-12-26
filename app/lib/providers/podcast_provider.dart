@@ -10,6 +10,8 @@ class PodcastProvider extends ChangeNotifier {
   Podcast? _currentPodcast;
   String? _error;
 
+  String _ttsEngine = 'chatterbox';
+
   PodcastProvider(this._repository) {
     _loadRecents();
   }
@@ -18,6 +20,12 @@ class PodcastProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   Podcast? get currentPodcast => _currentPodcast;
   String? get error => _error;
+  String get ttsEngine => _ttsEngine;
+
+  void setTtsEngine(String engine) {
+    _ttsEngine = engine;
+    notifyListeners();
+  }
 
   Future<void> _loadRecents() async {
     try {
@@ -34,9 +42,16 @@ class PodcastProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _currentPodcast = await _repository.generatePodcast(sources);
-      // Add to start of list
+      _currentPodcast = await _repository.generatePodcast(
+        sources,
+        ttsEngine: _ttsEngine,
+      );
+      // Check for TTS engine fallback and set warning
       if (_currentPodcast != null) {
+        final engineUsed = _currentPodcast!.ttsEngineUsed;
+        if (engineUsed != null && engineUsed.contains('fallback')) {
+          _error = '⚠️ Chatterbox 초기화 실패로 Edge TTS가 대신 사용되었습니다.';
+        }
         _recentPodcasts.insert(0, _currentPodcast!);
       }
     } catch (e) {

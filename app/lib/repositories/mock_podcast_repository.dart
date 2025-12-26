@@ -4,7 +4,10 @@ import 'podcast_repository.dart';
 
 class MockPodcastRepository implements PodcastRepository {
   @override
-  Future<Podcast> generatePodcast(List<Source> sources) async {
+  Future<Podcast> generatePodcast(
+    List<Source> sources, {
+    String? ttsEngine,
+  }) async {
     // Simulate network delay
     await Future.delayed(const Duration(seconds: 3));
 

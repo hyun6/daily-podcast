@@ -31,6 +31,12 @@ class Podcast {
   final String? filePath; // Local path or URL
   final PodcastMetadata metadata;
   final bool isGenerating;
+  final String? ttsEngineUsed; // Actual TTS engine used (may indicate fallback)
 
-  Podcast({this.filePath, required this.metadata, this.isGenerating = false});
+  Podcast({
+    this.filePath,
+    required this.metadata,
+    this.isGenerating = false,
+    this.ttsEngineUsed,
+  });
 }

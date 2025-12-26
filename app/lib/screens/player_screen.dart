@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 
@@ -16,6 +17,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool _isPlaying = false;
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
+  double _volume = 1.0;
+  double _playbackSpeed = 1.0;
+  final List<double> _speedOptions = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+
+  StreamSubscription? _playerStateSubscription;
+  StreamSubscription? _durationSubscription;
+  StreamSubscription? _positionSubscription;
 
   @override
   void initState() {
@@ -27,42 +35,57 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   void _setupAudioPlayer() {
-    _audioPlayer.onPlayerStateChanged.listen((state) {
-      setState(() {
-        _isPlaying = state == PlayerState.playing;
-      });
+    _playerStateSubscription = _audioPlayer.onPlayerStateChanged.listen((
+      state,
+    ) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = state == PlayerState.playing;
+        });
+      }
     });
 
-    _audioPlayer.onDurationChanged.listen((newDuration) {
-      setState(() {
-        _duration = newDuration;
-      });
+    _durationSubscription = _audioPlayer.onDurationChanged.listen((
+      newDuration,
+    ) {
+      if (mounted) {
+        setState(() {
+          _duration = newDuration;
+        });
+      }
     });
 
-    _audioPlayer.onPositionChanged.listen((newPosition) {
-      setState(() {
-        _position = newPosition;
-      });
+    _positionSubscription = _audioPlayer.onPositionChanged.listen((
+      newPosition,
+    ) {
+      if (mounted) {
+        setState(() {
+          _position = newPosition;
+        });
+      }
     });
   }
 
   Future<void> _loadAudio(String path) async {
-    // For local files or URLs. Handled by Source
-    // If it's a local file path, Source.deviceFile
-    // If URL, Source.url
-    // Assuming URL or asset for now.
-    // For this mock, we might struggle with "mock_path.mp3" unless we put it in assets.
-    // Let's assume URL for real implementation.
-    // For mock, we can ignore or try to load a dummy.
     try {
-      // Example: await _audioPlayer.setSourceUrl(path);
+      print("[PlayerScreen] Loading audio from: $path");
+      // Check if it's a URL or local file
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        await _audioPlayer.setSourceUrl(path);
+      } else {
+        await _audioPlayer.setSourceDeviceFile(path);
+      }
+      print("[PlayerScreen] Audio loaded successfully");
     } catch (e) {
-      print("Error loading audio: $e");
+      print("[PlayerScreen] Error loading audio: $e");
     }
   }
 
   @override
   void dispose() {
+    _playerStateSubscription?.cancel();
+    _durationSubscription?.cancel();
+    _positionSubscription?.cancel();
     _audioPlayer.dispose();
     super.dispose();
   }
@@ -110,7 +133,29 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
+            // Volume Control
+            Row(
+              children: [
+                const Icon(Icons.volume_down, color: Colors.deepPurple),
+                Expanded(
+                  child: Slider(
+                    min: 0,
+                    max: 1,
+                    value: _volume,
+                    activeColor: Colors.deepPurple,
+                    onChanged: (value) async {
+                      setState(() {
+                        _volume = value;
+                      });
+                      await _audioPlayer.setVolume(value);
+                    },
+                  ),
+                ),
+                const Icon(Icons.volume_up, color: Colors.deepPurple),
+              ],
+            ),
+            const SizedBox(height: 24),
             CircleAvatar(
               radius: 35,
               child: IconButton(
@@ -127,6 +172,41 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   }
                 },
               ),
+            ),
+            const SizedBox(height: 16),
+            // Playback Speed Control
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.speed, color: Colors.deepPurple),
+                const SizedBox(width: 8),
+                DropdownButton<double>(
+                  value: _playbackSpeed,
+                  underline: Container(),
+                  items: _speedOptions.map((speed) {
+                    return DropdownMenuItem(
+                      value: speed,
+                      child: Text(
+                        '${speed}x',
+                        style: TextStyle(
+                          fontWeight: speed == _playbackSpeed
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          color: Colors.deepPurple,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) async {
+                    if (value != null) {
+                      setState(() {
+                        _playbackSpeed = value;
+                      });
+                      await _audioPlayer.setPlaybackRate(value);
+                    }
+                  },
+                ),
+              ],
             ),
           ],
         ),
