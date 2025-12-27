@@ -16,13 +16,46 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _urlController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
-  String _selectedType = 'rss';
+  String _selectedType = 'web';
+  bool _isAutoDetected = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _urlController.addListener(_onUrlChanged);
+  }
 
   @override
   void dispose() {
+    _urlController.removeListener(_onUrlChanged);
     _urlController.dispose();
     _nameController.dispose();
     super.dispose();
+  }
+
+  void _onUrlChanged() {
+    final url = _urlController.text.toLowerCase();
+    String? detectedType;
+
+    if (url.contains('youtube.com') || url.contains('youtu.be')) {
+      detectedType = 'youtube';
+    } else if (url.contains('.rss') ||
+        url.contains('.xml') ||
+        url.contains('/feed') ||
+        url.contains('rss')) {
+      detectedType = 'rss';
+    } else if (url.isNotEmpty) {
+      detectedType = 'web';
+    }
+
+    if (detectedType != null && detectedType != _selectedType) {
+      setState(() {
+        _selectedType = detectedType!;
+        _isAutoDetected = true;
+      });
+    } else if (url.isEmpty) {
+      setState(() => _isAutoDetected = false);
+    }
   }
 
   Source? _createSource() {
@@ -38,16 +71,26 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _generatePodcast() {
-    final source = _createSource();
-    if (source == null) return;
-    context.read<PodcastProvider>().generatePodcast([source]);
-  }
-
   void _generateScriptOnly() {
     final source = _createSource();
-    if (source == null) return;
+    if (source == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('URL을 입력해주세요.')));
+      return;
+    }
     context.read<PodcastProvider>().generateScriptOnly([source]);
+  }
+
+  void _generatePodcast() {
+    final source = _createSource();
+    if (source == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('URL을 입력해주세요.')));
+      return;
+    }
+    context.read<PodcastProvider>().generatePodcast([source]);
   }
 
   @override
@@ -127,37 +170,84 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                   ),
-                DropdownButtonFormField<String>(
-                  value: _selectedType,
-                  decoration: const InputDecoration(labelText: 'Source Type'),
-                  items: const [
-                    DropdownMenuItem(value: 'rss', child: Text('RSS Feed')),
-                    DropdownMenuItem(
-                      value: 'web',
-                      child: Text('Web Page / Blog'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'youtube',
-                      child: Text('YouTube Video'),
-                    ),
-                  ],
-                  onChanged: (val) => setState(() => _selectedType = val!),
-                ),
-                const SizedBox(height: 16),
+                // URL 입력 (먼저)
                 TextField(
                   controller: _urlController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'URL',
-                    border: OutlineInputBorder(),
+                    hintText: 'https://...',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.link),
+                    suffixIcon: _urlController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _urlController.clear();
+                              setState(() => _isAutoDetected = false);
+                            },
+                          )
+                        : null,
                   ),
+                  keyboardType: TextInputType.url,
+                  textInputAction: TextInputAction.next,
                 ),
                 const SizedBox(height: 16),
+
+                // 소스 타입 (자동 감지 표시)
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedType,
+                        decoration: InputDecoration(
+                          labelText: 'Source Type',
+                          suffixIcon: _isAutoDetected
+                              ? Tooltip(
+                                  message: 'URL에서 자동 감지됨',
+                                  child: Icon(
+                                    Icons.auto_awesome,
+                                    size: 18,
+                                    color: Theme.of(context).primaryColor,
+                                  ),
+                                )
+                              : null,
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'web',
+                            child: Text('Web Page / Blog'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'rss',
+                            child: Text('RSS Feed'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'youtube',
+                            child: Text('YouTube Video'),
+                          ),
+                        ],
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedType = val!;
+                            _isAutoDetected = false;
+                          });
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // 소스 이름 (선택적)
                 TextField(
                   controller: _nameController,
                   decoration: const InputDecoration(
                     labelText: 'Source Name (Optional)',
+                    hintText: '예: 기술 블로그, 뉴스 피드...',
                     border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.label_outline),
                   ),
+                  textInputAction: TextInputAction.done,
                 ),
                 const SizedBox(height: 24),
 

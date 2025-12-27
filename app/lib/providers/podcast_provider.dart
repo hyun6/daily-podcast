@@ -5,13 +5,11 @@ import '../repositories/podcast_repository.dart';
 import '../repositories/script_repository.dart';
 
 class PodcastProvider extends ChangeNotifier {
-class PodcastProvider extends ChangeNotifier {
   final PodcastRepository _repository;
   final ScriptRepository _scriptRepository;
 
   List<Podcast> _recentPodcasts = [];
   bool _isLoading = false;
-  Podcast? _currentPodcast;
   Podcast? _currentPodcast;
   String? _error;
 
@@ -88,9 +86,21 @@ class PodcastProvider extends ChangeNotifier {
 
   void loadScriptFromHistory(DialogueScript script) {
     _currentScript = script;
-    _currentSources = null; // We don't have sources for saved scripts yet unless we save them too
+    _currentSources =
+        null; // We don't have sources for saved scripts yet unless we save them too
     _error = null;
     notifyListeners();
+  }
+
+  Future<void> saveCurrentScript() async {
+    if (_currentScript == null) return;
+    try {
+      await _scriptRepository.saveScript(_currentScript!);
+      await loadSavedScripts();
+    } catch (e) {
+      _error = "스크립트 저장 실패: $e";
+      notifyListeners();
+    }
   }
 
   Future<void> generatePodcast(List<Source> sources) async {
