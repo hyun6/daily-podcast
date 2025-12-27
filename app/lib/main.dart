@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/podcast_provider.dart';
 import 'repositories/real_podcast_repository.dart';
+import 'repositories/local_script_repository.dart';
 import 'screens/main_screen.dart';
 
 void main() {
@@ -19,6 +20,7 @@ class DailyPodcastApp extends StatelessWidget {
           // Use localhost for macOS/iOS Simulator. Use 10.0.2.2 for Android Emulator.
           create: (_) => PodcastProvider(
             RealPodcastRepository(baseUrl: 'http://127.0.0.1:8000'),
+            LocalScriptRepository(),
           ),
         ),
       ],

@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../models/podcast.dart';
+import '../models/dialogue_script.dart';
 import 'podcast_repository.dart';
 
 class RealPodcastRepository implements PodcastRepository {
@@ -74,6 +75,43 @@ class RealPodcastRepository implements PodcastRepository {
     } catch (e) {
       print("Failed to fetch recent episodes: $e");
       return [];
+    }
+  }
+
+  @override
+  Future<DialogueScript> generateScript(List<Source> sources) async {
+    try {
+      final response = await _dio.post(
+        '/api/v1/generate-script',
+        data: {
+          "sources": sources
+              .map((s) => {"source_type": s.type, "url": s.url, "name": s.name})
+              .toList(),
+        },
+      );
+
+      final data = response.data;
+      return DialogueScript.fromJson(data['script']);
+    } catch (e) {
+      throw Exception('Failed to generate script: $e');
+    }
+  }
+
+  @override
+  Future<String> generateAudioFromScript(
+    DialogueScript script, {
+    String? ttsEngine,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/api/v1/generate-audio',
+        data: {"script": script.toJson(), "tts_engine": ttsEngine},
+      );
+
+      final data = response.data;
+      return "${baseUrl.replaceAll("/api/v1", "")}/${data['file_path']}";
+    } catch (e) {
+      throw Exception('Failed to generate audio: $e');
     }
   }
 }

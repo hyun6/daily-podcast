@@ -66,76 +66,72 @@ class TTSEngine:
 
     async def _generate_chatterbox(self, script: DialogueScript) -> tuple[str, str]:
         try:
-            # NOTE: The installed chatterbox-tts package structure is complex.
-            # We are wrapping this in a broad try/catch to fallback to EdgeTTS 
-            # if Chatterbox fails to load (common due to model dependency issues).
-            try:
-                # Attempt to find a usable class. This is experimental.
-                import chatterbox
-                if hasattr(chatterbox, 'ChatterboxMultilingualTTS'):
-                    # This class requires args, so we can't instantiate easily without models.
-                    raise ImportError("Chatterbox models not configured.")
-                elif hasattr(chatterbox, 'Chatterbox'):
-                    tts = chatterbox.Chatterbox()
-                else:
-                    raise ImportError("Chatterbox class not found in package.")
-            except ImportError as ie:
-                 print(f"Chatterbox Import Error: {ie}")
-                 # Fallback - return edge-tts with fallback indicator
-                 print("Falling back to EdgeTTS due to Chatterbox error.")
-                 path = await self._generate_edge_tts(script)
-                 return (path, "edge-tts (chatterbox fallback)")
-                 
+            import torch
+            import torchaudio as ta
+            from chatterbox.tts import ChatterboxTTS
+            
+            # Determine device - prefer MPS (Apple Silicon) > CUDA > CPU
+            if torch.backends.mps.is_available():
+                device = "mps"
+            elif torch.cuda.is_available():
+                device = "cuda"
+            else:
+                device = "cpu"
+            
+            print(f"[Chatterbox] Loading model on device: {device}")
+            model = ChatterboxTTS.from_pretrained(device=device)
+            print("[Chatterbox] Model loaded successfully!")
+            
+        except ImportError as ie:
+            print(f"[Chatterbox] Import Error: {ie}")
+            print("[Chatterbox] Falling back to EdgeTTS.")
+            path = await self._generate_edge_tts(script)
+            return (path, "edge-tts (chatterbox fallback)")
         except Exception as e:
-            print(f"Chatterbox Initialization Error: {e}")
-            print("Falling back to EdgeTTS.")
+            print(f"[Chatterbox] Initialization Error: {e}")
+            print("[Chatterbox] Falling back to EdgeTTS.")
             path = await self._generate_edge_tts(script)
             return (path, "edge-tts (chatterbox fallback)")
 
-        # Implementation if initialization succeeded (unlikely with current setup)
-        # For safety, we just return fallback here because the code below 
-        # is hypothetical and will likely crash again.
-        path = await self._generate_edge_tts(script)
-        return (path, "edge-tts (chatterbox fallback)")
-
-        # UNREACHABLE CODE BELOW (Kept for reference or future implementation)
-        # tts = Chatterbox() 
- 
-        
-        combined_audio = AudioSegment.empty()
-        
-        # Available speakers in Chatterbox Multilingual (Guestimate/Default)
-        # We need to map Host A/B to available IDs. 
-        # Since we don't know them, we'll try to use defaults or first available.
-        
-        for i, line in enumerate(script.lines):
-            speaker = line.speaker
-            text = line.text
+        # Generate audio using Chatterbox
+        try:
+            combined_audio = AudioSegment.empty()
             
-            # Chatterbox generation (Hypothetical API based on common patterns)
-            # We assume tts.synthesize returns bytes or saves to file.
-            # Use 'run_in_executor' to prevent blocking the event loop
-            
-            segment_path = os.path.join(self.temp_dir, f"segment_cb_{i}.wav")
-            
-            # Running synthesis in a thread since it's likely blocking CPU work
-            await asyncio.to_thread(self._run_chatterbox_synthesis, tts, text, speaker, segment_path)
-            
-            if os.path.exists(segment_path):
-                segment_audio = AudioSegment.from_wav(segment_path)
-                combined_audio += segment_audio
-                combined_audio += AudioSegment.silent(duration=300)
+            for i, line in enumerate(script.lines):
+                text = line.text
+                segment_path = os.path.join(self.temp_dir, f"segment_cb_{i}.wav")
                 
-        filename = f"cb_{script.title.replace(' ', '_')}_{script.created_at.strftime('%Y%m%d%H%M')}.mp3"
-        output_path = os.path.join(self.download_dir, filename)
-        combined_audio.export(output_path, format="mp3")
-
-        # Cleanup temp
-        for f in os.listdir(self.temp_dir):
-            if f.startswith("segment_cb_"):
-                os.remove(os.path.join(self.temp_dir, f))
+                print(f"[Chatterbox] Generating segment {i+1}/{len(script.lines)}...")
                 
-        return output_path
+                # Run synthesis in thread to avoid blocking async
+                wav = await asyncio.to_thread(model.generate, text)
+                
+                # Save using torchaudio
+                await asyncio.to_thread(ta.save, segment_path, wav, model.sr)
+                
+                if os.path.exists(segment_path):
+                    segment_audio = AudioSegment.from_wav(segment_path)
+                    combined_audio += segment_audio
+                    combined_audio += AudioSegment.silent(duration=300)
+            
+            # Export final audio
+            filename = f"cb_{script.title.replace(' ', '_')}_{script.created_at.strftime('%Y%m%d%H%M')}.mp3"
+            output_path = os.path.join(self.download_dir, filename)
+            combined_audio.export(output_path, format="mp3")
+            
+            # Cleanup temp
+            for f in os.listdir(self.temp_dir):
+                if f.startswith("segment_cb_"):
+                    os.remove(os.path.join(self.temp_dir, f))
+            
+            print(f"[Chatterbox] Audio saved to: {output_path}")
+            return (output_path, "chatterbox")
+            
+        except Exception as e:
+            print(f"[Chatterbox] Generation Error: {e}")
+            print("[Chatterbox] Falling back to EdgeTTS.")
+            path = await self._generate_edge_tts(script)
+            return (path, "edge-tts (chatterbox fallback)")
 
     def _run_chatterbox_synthesis(self, tts_instance, text, speaker, output_path):
         # Implementation depends on actual Chatterbox API. 

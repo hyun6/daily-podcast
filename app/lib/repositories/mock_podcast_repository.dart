@@ -1,5 +1,6 @@
 import 'dart:async';
 import '../models/podcast.dart';
+import '../models/dialogue_script.dart';
 import 'podcast_repository.dart';
 
 class MockPodcastRepository implements PodcastRepository {
@@ -41,5 +42,40 @@ class MockPodcastRepository implements PodcastRepository {
         ),
       ),
     ];
+  }
+
+  @override
+  Future<DialogueScript> generateScript(List<Source> sources) async {
+    await Future.delayed(const Duration(seconds: 2));
+
+    return DialogueScript(
+      title: "Mock 팟캐스트 스크립트",
+      lines: [
+        DialogueLine(
+          speaker: "Host A",
+          text: "안녕하세요, 오늘의 AI 소식을 전해드립니다.",
+          emotion: "neutral",
+        ),
+        DialogueLine(
+          speaker: "Host B",
+          text: "정말 흥미로운 소식들이 많네요!",
+          emotion: "excited",
+        ),
+        DialogueLine(
+          speaker: "Host A",
+          text: "네, 오늘은 ${sources.length}개의 소스에서 정보를 가져왔습니다.",
+          emotion: "neutral",
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<String> generateAudioFromScript(
+    DialogueScript script, {
+    String? ttsEngine,
+  }) async {
+    await Future.delayed(const Duration(seconds: 3));
+    return "mock_audio_from_script.mp3";
   }
 }

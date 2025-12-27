@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-from src.models import ProcessingRequest, PodcastEpisode, PodcastMetadata
+from src.models import ProcessingRequest, PodcastEpisode, PodcastMetadata, ScriptResponse, AudioFromScriptRequest, AudioResponse, DialogueScript
 from src.fetcher.text_fetchers import RSSFetcher, WebFetcher
 from src.fetcher.youtube_fetcher import YouTubeFetcher
 from src.writer.llm_client import GeminiClient
@@ -102,3 +102,69 @@ async def list_episodes():
             if f.endswith(".mp3"):
                 files.append(f)
     return {"episodes": files}
+
+@router.post("/generate-script", response_model=ScriptResponse)
+async def generate_script_only(request: ProcessingRequest):
+    """
+    Generate a podcast script from the provided sources without generating audio.
+    This allows users to preview and edit the script before TTS generation.
+    """
+    print(f"[DEBUG] Script-only generation: sources={len(request.sources)}")
+    
+    full_text = ""
+    source_names = []
+    
+    # 1. Fetch Content
+    for source in request.sources:
+        content = None
+        try:
+            if source.source_type == 'rss':
+                content = rss_fetcher.fetch(str(source.url))
+            elif source.source_type == 'web':
+                content = web_fetcher.fetch(str(source.url))
+            elif source.source_type == 'youtube':
+                content = youtube_fetcher.fetch(str(source.url))
+            else:
+                print(f"[WARN] Unknown source_type: {source.source_type}")
+        except Exception as e:
+            print(f"[ERROR] Failed to fetch {source.url}: {e}")
+        
+        if content:
+            full_text += f"\n\nSource: {source.name or source.url}\n{content}"
+            source_names.append(source.name or str(source.url))
+    
+    if not full_text:
+        print("[ERROR] Failed to fetch any content from sources.")
+        raise HTTPException(status_code=400, detail="Failed to fetch any content from sources. Check your URLs and source types.")
+
+    # 2. Generate Script
+    script = llm_client.generate_script(full_text)
+    if not script.lines:
+        raise HTTPException(status_code=500, detail="Script generation failed.")
+
+    return ScriptResponse(
+        script=script,
+        sources=source_names
+    )
+
+@router.post("/generate-audio", response_model=AudioResponse)
+async def generate_audio_from_script(request: AudioFromScriptRequest):
+    """
+    Generate audio from an existing script using TTS.
+    This is the second step after script preview/editing.
+    """
+    print(f"[DEBUG] Audio generation from script: title={request.script.title}, lines={len(request.script.lines)}")
+    
+    if not request.script.lines:
+        raise HTTPException(status_code=400, detail="Script has no dialogue lines.")
+
+    try:
+        audio_path, engine_used = await tts_engine.generate_audio(request.script, tts_engine=request.tts_engine)
+        print(f"[INFO] Audio generated using: {engine_used}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Audio generation failed: {str(e)}")
+
+    return AudioResponse(
+        file_path=audio_path,
+        tts_engine_used=engine_used
+    )

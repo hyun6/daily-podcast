@@ -23,4 +23,5 @@ dependencies = [
     "uvicorn>=0.40.0",
     "youtube-transcript-api>=1.2.3",
     "onnx>=1.14.0,<1.17.0",
+    "torchaudio>=2.6.0",
 ]

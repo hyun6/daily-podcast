@@ -38,3 +38,20 @@ class PodcastEpisode(BaseModel):
     file_path: str
     metadata: PodcastMetadata
     tts_engine_used: Optional[str] = None  # Actual engine used (may differ if fallback occurred)
+
+# --- Script Generation Models ---
+
+class ScriptResponse(BaseModel):
+    """Response for script-only generation."""
+    script: DialogueScript
+    sources: List[str]
+
+class AudioFromScriptRequest(BaseModel):
+    """Request to generate audio from an existing script."""
+    script: DialogueScript
+    tts_engine: Optional[str] = None  # 'edge-tts' or 'chatterbox'
+
+class AudioResponse(BaseModel):
+    """Response for audio generation from script."""
+    file_path: str
+    tts_engine_used: Optional[str] = None
