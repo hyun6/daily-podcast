@@ -80,7 +80,7 @@ class PodcastfyClient:
             urls=urls,
             conversation_config=self.conversation_config,
             tts_model=tts_engine,
-            llm_model_name="gemini-2.0-flash-exp"
+            llm_model_name="gemini-flash-latest"
         )
         
         
@@ -126,7 +126,7 @@ class PodcastfyClient:
             text=text,
             conversation_config=self.conversation_config,
             tts_model=tts_engine,
-            llm_model_name="gemini-2.0-flash-exp"
+            llm_model_name="gemini-flash-latest"
         )
         
         transcript_path = self._find_latest_transcript()
@@ -167,7 +167,7 @@ class PodcastfyClient:
             text=text,
             conversation_config=self.conversation_config,
             transcript_only=True,
-            llm_model_name="gemini-2.0-flash-exp"
+            llm_model_name="gemini-flash-latest"
         )
         
         transcript_path = self._find_latest_transcript()
