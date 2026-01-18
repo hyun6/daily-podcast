@@ -17,6 +17,16 @@ if ! command -v uv &> /dev/null; then
     exit 1
 fi
 
+# Check for .env file
+if [ ! -f ".env" ]; then
+    echo "Warning: .env file not found in $BACKEND_DIR"
+    echo "Please copy .env.example to .env and configure your environment variables."
+fi
+
+# Sync dependencies to ensure environment is up-to-date
+echo "Syncing dependencies..."
+uv sync
+
 # Enable MPS fallback for PyTorch (Required for some ops like aten::angle on Mac)
 export PYTORCH_ENABLE_MPS_FALLBACK=1
 
