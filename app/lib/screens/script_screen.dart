@@ -48,9 +48,11 @@ class ScriptScreen extends StatelessWidget {
 
           // Loading state for audio generation
           if (provider.isGeneratingAudio) {
-            return const _LoadingState(
+            return _LoadingState(
               message: '오디오 생성 중...',
               subMessage: 'TTS로 팟캐스트를 만들고 있습니다',
+              progress: provider.audioProgress,
+              onCancel: () => provider.cancelAudioGeneration(),
             );
           }
 
@@ -67,6 +69,7 @@ class ScriptScreen extends StatelessWidget {
               provider.generateAudioFromCurrentScript().then((_) {
                 if (provider.currentPodcast != null && provider.error == null) {
                   // Navigate to player screen on success
+                  if (!context.mounted) return;
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -203,7 +206,9 @@ class ScriptScreen extends StatelessWidget {
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(12),
                                         side: BorderSide(
-                                          color: Colors.grey.withOpacity(0.1),
+                                          color: Colors.grey.withValues(
+                                            alpha: 0.1,
+                                          ),
                                         ),
                                       ),
                                       child: InkWell(
@@ -372,26 +377,82 @@ class ScriptScreen extends StatelessWidget {
 class _LoadingState extends StatelessWidget {
   final String message;
   final String subMessage;
+  final double? progress;
+  final VoidCallback? onCancel;
 
-  const _LoadingState({required this.message, required this.subMessage});
+  const _LoadingState({
+    required this.message,
+    required this.subMessage,
+    this.progress,
+    this.onCancel,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 24),
-          Text(message, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          Text(
-            subMessage,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 48.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (progress != null)
+              Column(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 12,
+                      backgroundColor: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHighest,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '${(progress! * 100).toInt()}% 완료',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ],
+              )
+            else
+              const CircularProgressIndicator(),
+            const SizedBox(height: 24),
+            Text(
+              message,
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subMessage,
+              textAlign: TextAlign.center,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+            ),
+            if (onCancel != null) ...[
+              const SizedBox(height: 48),
+              OutlinedButton.icon(
+                onPressed: onCancel,
+                icon: const Icon(Icons.close),
+                label: const Text('취소'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  side: const BorderSide(color: Colors.red),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -579,7 +640,7 @@ class _ScriptContent extends StatelessWidget {
                       radius: 20,
                       backgroundColor: _getSpeakerColor(
                         line.speaker,
-                      ).withOpacity(0.2),
+                      ).withValues(alpha: 0.2),
                       child: Text(
                         isHostA ? 'A' : 'B',
                         style: TextStyle(
@@ -597,12 +658,12 @@ class _ScriptContent extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: _getSpeakerColor(
                             line.speaker,
-                          ).withOpacity(0.1),
+                          ).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: _getSpeakerColor(
                               line.speaker,
-                            ).withOpacity(0.2),
+                            ).withValues(alpha: 0.2),
                           ),
                         ),
                         child: Column(
@@ -650,7 +711,7 @@ class _ScriptContent extends StatelessWidget {
             color: Theme.of(context).colorScheme.surface,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 8,
                 offset: const Offset(0, -2),
               ),
@@ -662,18 +723,24 @@ class _ScriptContent extends StatelessWidget {
                 // TTS Engine selector
                 Row(
                   children: [
-                    const Text('TTS 엔진: '),
-                    const SizedBox(width: 8),
-                    ChoiceChip(
-                      label: const Text('Chatterbox'),
-                      selected: ttsEngine == 'chatterbox',
-                      onSelected: (_) => onTtsEngineChanged('chatterbox'),
+                    const Text(
+                      'TTS 엔진: ',
+                      style: TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    const SizedBox(width: 8),
-                    ChoiceChip(
-                      label: const Text('Edge TTS'),
-                      selected: ttsEngine == 'edge-tts',
-                      onSelected: (_) => onTtsEngineChanged('edge-tts'),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                      ),
+                      child: const Text(
+                        'Edge TTS (Fast & Natural)',
+                        style: TextStyle(fontSize: 12, color: Colors.blue),
+                      ),
                     ),
                   ],
                 ),

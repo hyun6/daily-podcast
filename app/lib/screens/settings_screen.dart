@@ -20,25 +20,8 @@ class SettingsScreen extends StatelessWidget {
               ),
               ListTile(
                 title: const Text("TTS Engine"),
-                subtitle: Text(provider.ttsEngine),
-                trailing: DropdownButton<String>(
-                  value: provider.ttsEngine,
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'edge-tts',
-                      child: Text('Edge TTS'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'chatterbox',
-                      child: Text('Chatterbox'),
-                    ),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) {
-                      provider.setTtsEngine(val);
-                    }
-                  },
-                ),
+                subtitle: const Text("Using Edge TTS (Optimized for Speed)"),
+                trailing: const Icon(Icons.check_circle, color: Colors.green),
               ),
             ],
           );

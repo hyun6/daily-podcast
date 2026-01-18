@@ -68,16 +68,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   Future<void> _loadAudio(String path) async {
     try {
-      print("[PlayerScreen] Loading audio from: $path");
+      debugPrint("[PlayerScreen] Loading audio from: $path");
       // Check if it's a URL or local file
       if (path.startsWith('http://') || path.startsWith('https://')) {
         await _audioPlayer.setSourceUrl(path);
       } else {
         await _audioPlayer.setSourceDeviceFile(path);
       }
-      print("[PlayerScreen] Audio loaded successfully");
+      debugPrint("[PlayerScreen] Audio loaded successfully");
     } catch (e) {
-      print("[PlayerScreen] Error loading audio: $e");
+      debugPrint("[PlayerScreen] Error loading audio: $e");
     }
   }
 
