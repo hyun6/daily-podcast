@@ -23,6 +23,7 @@ class ContentCubit extends Cubit<ContentState> {
   Future<void> deleteContent(Podcast podcast) async {
     if (state is ContentLoaded) {
       final currentList = (state as ContentLoaded).podcasts;
+      // Optimistic update
       final optimisticList = List<Podcast>.from(currentList)..remove(podcast);
       emit(ContentLoaded(optimisticList));
 
@@ -30,10 +31,17 @@ class ContentCubit extends Cubit<ContentState> {
         try {
           await _repository.deleteEpisode(podcast.filePath!);
         } catch (e) {
-          emit(ContentError("Failed to delete episode: $e"));
-          // Rollback on failure could be implemented here, but typically we just show error
-          // and maybe re-fetch.
-          fetchContent();
+          // Rollback and show error
+          emit(
+            ContentLoaded(
+              currentList,
+              errorMessage: "Failed to delete episode: $e",
+            ),
+          );
+          // Allow time for the UI to consume the error before clearing it?
+          // Or strictly reliant on the state change.
+          // Ideally we might want to clear the error after a bit or on next action,
+          // but for now, this ensures the list is restored.
         }
       }
     }

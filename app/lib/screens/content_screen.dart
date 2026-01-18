@@ -36,50 +36,90 @@ class _ContentScreenState extends State<ContentScreen> {
           ),
         ],
       ),
-      body: BlocBuilder<ContentCubit, ContentState>(
-        builder: (context, state) {
-          if (state is ContentLoading) {
-            return const Center(child: CircularProgressIndicator());
+      body: BlocListener<ContentCubit, ContentState>(
+        listener: (context, state) {
+          if (state is ContentLoaded && state.errorMessage != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.errorMessage!),
+                backgroundColor: Colors.red,
+              ),
+            );
+          } else if (state is ContentError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: Colors.red,
+              ),
+            );
           }
+        },
+        child: BlocBuilder<ContentCubit, ContentState>(
+          builder: (context, state) {
+            if (state is ContentLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          if (state is ContentError) {
-            return Center(child: Text("오류 발생: ${state.message}"));
-          }
-
-          if (state is ContentLoaded) {
-            if (state.podcasts.isEmpty) {
+            if (state is ContentError) {
+              // Show retry button or empty view on full error
               return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.perm_media_outlined,
-                      size: 64,
-                      color: Colors.grey[300],
+                    const Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: Colors.red,
                     ),
                     const SizedBox(height: 16),
-                    Text(
-                      '저장된 팟캐스트가 없습니다.',
-                      style: Theme.of(context).textTheme.titleMedium,
+                    Text("오류 발생: ${state.message}"),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () =>
+                          context.read<ContentCubit>().fetchContent(),
+                      child: const Text('재시도'),
                     ),
                   ],
                 ),
               );
             }
 
-            return ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: state.podcasts.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final podcast = state.podcasts[index];
-                return _buildPodcastItem(context, podcast);
-              },
-            );
-          }
+            if (state is ContentLoaded) {
+              if (state.podcasts.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.perm_media_outlined,
+                        size: 64,
+                        color: Colors.grey[300],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        '저장된 팟캐스트가 없습니다.',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ],
+                  ),
+                );
+              }
 
-          return const SizedBox.shrink();
-        },
+              return ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: state.podcasts.length,
+                separatorBuilder: (context, index) =>
+                    const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final podcast = state.podcasts[index];
+                  return _buildPodcastItem(context, podcast);
+                },
+              );
+            }
+
+            return const SizedBox.shrink();
+          },
+        ),
       ),
     );
   }
