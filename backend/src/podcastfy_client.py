@@ -70,6 +70,12 @@ class PodcastfyClient:
         Returns:
             tuple: (오디오 파일 경로, DialogueScript)
         """
+        # Debug: Check environment variables
+        jina_key = os.environ.get("JINA_API_KEY")
+        print(f"[DEBUG] JINA_API_KEY configured: {bool(jina_key)}")
+        if jina_key:
+            print(f"[DEBUG] JINA_API_KEY prefix: {jina_key[:4]}...")
+
         audio_file = generate_podcast(
             urls=urls,
             conversation_config=self.conversation_config,
