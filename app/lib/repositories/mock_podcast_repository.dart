@@ -1,6 +1,7 @@
 import 'dart:async';
 import '../models/podcast.dart';
 import '../models/dialogue_script.dart';
+import '../models/task_status.dart';
 import 'podcast_repository.dart';
 
 class MockPodcastRepository implements PodcastRepository {
@@ -77,5 +78,28 @@ class MockPodcastRepository implements PodcastRepository {
   }) async {
     await Future.delayed(const Duration(seconds: 3));
     return "mock_audio_from_script.mp3";
+  }
+
+  @override
+  Future<String> startAudioGeneration(
+    DialogueScript script, {
+    String? ttsEngine,
+  }) async {
+    return "mock_task_id";
+  }
+
+  @override
+  Future<TaskStatus> getTaskStatus(String taskId) async {
+    return TaskStatus(
+      taskId: taskId,
+      status: "completed",
+      progress: 1.0,
+      result: "mock_polled_audio.mp3",
+    );
+  }
+
+  @override
+  Future<void> cancelTask(String taskId) async {
+    // Mock cancellation
   }
 }

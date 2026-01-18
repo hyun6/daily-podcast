@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
@@ -39,7 +40,7 @@ class LocalScriptRepository implements ScriptRepository {
             final json = jsonDecode(content);
             scripts.add(DialogueScript.fromJson(json));
           } catch (e) {
-            print('Error reading script file ${entity.path}: $e');
+            debugPrint('Error reading script file ${entity.path}: $e');
           }
         }
       }
@@ -48,7 +49,7 @@ class LocalScriptRepository implements ScriptRepository {
       scripts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return scripts;
     } catch (e) {
-      print('Error listing scripts: $e');
+      debugPrint('Error listing scripts: $e');
       return [];
     }
   }
@@ -60,7 +61,7 @@ class LocalScriptRepository implements ScriptRepository {
       final file = File(path.join(dir.path, _getFileName(script)));
       await file.writeAsString(jsonEncode(script.toJson()));
     } catch (e) {
-      print('Error saving script: $e');
+      debugPrint('Error saving script: $e');
       rethrow;
     }
   }
@@ -75,12 +76,12 @@ class LocalScriptRepository implements ScriptRepository {
       if (await file.exists()) {
         await file.delete();
       } else {
-        print('File not found for deletion: $fileName');
+        debugPrint('File not found for deletion: $fileName');
         // Try searching by matching content if strictly necessary,
         // but for now assume filename consistency.
       }
     } catch (e) {
-      print('Error deleting script: $e');
+      debugPrint('Error deleting script: $e');
       rethrow;
     }
   }

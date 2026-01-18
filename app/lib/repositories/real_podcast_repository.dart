@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import '../models/podcast.dart';
 import '../models/dialogue_script.dart';
+import '../models/task_status.dart';
 import 'podcast_repository.dart';
 
 class RealPodcastRepository implements PodcastRepository {
@@ -73,7 +75,7 @@ class RealPodcastRepository implements PodcastRepository {
         );
       }).toList();
     } catch (e) {
-      print("Failed to fetch recent episodes: $e");
+      debugPrint("Failed to fetch recent episodes: $e");
       return [];
     }
   }
@@ -112,6 +114,55 @@ class RealPodcastRepository implements PodcastRepository {
       return "${baseUrl.replaceAll("/api/v1", "")}/${data['file_path']}";
     } catch (e) {
       throw Exception('Failed to generate audio: $e');
+    }
+  }
+
+  @override
+  Future<String> startAudioGeneration(
+    DialogueScript script, {
+    String? ttsEngine,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/api/v1/generate-audio-async',
+        data: {"script": script.toJson(), "tts_engine": ttsEngine},
+      );
+      return response.data['task_id'];
+    } catch (e) {
+      throw Exception('Failed to start audio generation: $e');
+    }
+  }
+
+  @override
+  Future<TaskStatus> getTaskStatus(String taskId) async {
+    try {
+      final response = await _dio.get('/api/v1/tasks/$taskId');
+      final taskStatus = TaskStatus.fromJson(response.data);
+
+      // Convert relative path to full URL if result exists
+      if (taskStatus.result != null && !taskStatus.result!.startsWith('http')) {
+        final fullUrl =
+            "${baseUrl.replaceAll("/api/v1", "")}/${taskStatus.result}";
+        return TaskStatus(
+          taskId: taskStatus.taskId,
+          status: taskStatus.status,
+          progress: taskStatus.progress,
+          result: fullUrl,
+          error: taskStatus.error,
+        );
+      }
+      return taskStatus;
+    } catch (e) {
+      throw Exception('Failed to get task status: $e');
+    }
+  }
+
+  @override
+  Future<void> cancelTask(String taskId) async {
+    try {
+      await _dio.post('/api/v1/tasks/$taskId/cancel');
+    } catch (e) {
+      throw Exception('Failed to cancel task: $e');
     }
   }
 }
