@@ -1,93 +1,404 @@
-import 'dart:async';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../cubits/player/player_cubit.dart';
+import '../cubits/player/player_state.dart';
+import '../cubits/playlist/playlist_cubit.dart';
+import '../cubits/playlist/playlist_state.dart';
+import '../cubits/script/script_cubit.dart';
+import '../models/podcast.dart';
+import '../widgets/script_view.dart';
 
 class PlayerScreen extends StatefulWidget {
-  final String? audioPath;
-  final String? title;
-
-  const PlayerScreen({super.key, this.audioPath, this.title});
+  const PlayerScreen({super.key});
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  bool _isPlaying = false;
-  Duration _duration = Duration.zero;
-  Duration _position = Duration.zero;
-  double _volume = 1.0;
-  double _playbackSpeed = 1.0;
+  // Local state for UI toggles
+  bool _showScript = false;
   final List<double> _speedOptions = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 
-  StreamSubscription? _playerStateSubscription;
-  StreamSubscription? _durationSubscription;
-  StreamSubscription? _positionSubscription;
-
   @override
-  void initState() {
-    super.initState();
-    _setupAudioPlayer();
-    if (widget.audioPath != null) {
-      _loadAudio(widget.audioPath!);
+  Widget build(BuildContext context) {
+    // We listen to player state to update UI
+    return BlocConsumer<PlayerCubit, PlayerState>(
+      listenWhen: (previous, current) =>
+          previous.currentPodcast != current.currentPodcast,
+      listener: (context, state) {
+        // If podcast changed, maybe try to load its script?
+        // But ScriptCubit already loads everything. We just need to find it.
+      },
+      builder: (context, playerState) {
+        final currentPodcast = playerState.currentPodcast;
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Now Playing'),
+            centerTitle: true,
+            actions: [
+              IconButton(
+                icon: Icon(_showScript ? Icons.music_note : Icons.description),
+                onPressed: () {
+                  setState(() {
+                    _showScript = !_showScript;
+                  });
+                },
+                tooltip: _showScript ? 'Show Cover' : 'Show Script',
+              ),
+            ],
+          ),
+          body: Column(
+            children: [
+              // Upper Area: Script or Cover
+              Expanded(
+                flex: 3,
+                child: _showScript && currentPodcast != null
+                    ? _buildScriptView(context, currentPodcast)
+                    : _buildCoverView(currentPodcast),
+              ),
+
+              // Player Controls
+              _buildPlayerControls(context, playerState),
+
+              // Playlist Area
+              const Divider(),
+              Expanded(flex: 2, child: _buildPlaylist(context, currentPodcast)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildScriptView(BuildContext context, Podcast podcast) {
+    final scriptCubit = context.read<ScriptCubit>();
+    final script = scriptCubit.findScriptForPodcast(podcast.metadata.title);
+
+    if (script == null) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.speaker_notes_off, size: 48, color: Colors.grey),
+            SizedBox(height: 16),
+            Text("스크립트를 찾을 수 없습니다.", style: TextStyle(color: Colors.grey)),
+          ],
+        ),
+      );
     }
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.grey.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: ScriptView(script: script, showControls: false),
+    );
   }
 
-  void _setupAudioPlayer() {
-    _playerStateSubscription = _audioPlayer.onPlayerStateChanged.listen((
-      state,
-    ) {
-      if (mounted) {
-        setState(() {
-          _isPlaying = state == PlayerState.playing;
-        });
-      }
-    });
-
-    _durationSubscription = _audioPlayer.onDurationChanged.listen((
-      newDuration,
-    ) {
-      if (mounted) {
-        setState(() {
-          _duration = newDuration;
-        });
-      }
-    });
-
-    _positionSubscription = _audioPlayer.onPositionChanged.listen((
-      newPosition,
-    ) {
-      if (mounted) {
-        setState(() {
-          _position = newPosition;
-        });
-      }
-    });
+  Widget _buildCoverView(Podcast? podcast) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          width: 200,
+          height: 200,
+          decoration: BoxDecoration(
+            color: Colors.deepPurple.shade100,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.podcasts,
+            size: 100,
+            color: Colors.deepPurple,
+          ),
+        ),
+        const SizedBox(height: 32),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Text(
+            podcast?.metadata.title ?? "No Episode Selected",
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
   }
 
-  Future<void> _loadAudio(String path) async {
-    try {
-      debugPrint("[PlayerScreen] Loading audio from: $path");
-      // Check if it's a URL or local file
-      if (path.startsWith('http://') || path.startsWith('https://')) {
-        await _audioPlayer.setSourceUrl(path);
-      } else {
-        await _audioPlayer.setSourceDeviceFile(path);
-      }
-      debugPrint("[PlayerScreen] Audio loaded successfully");
-    } catch (e) {
-      debugPrint("[PlayerScreen] Error loading audio: $e");
-    }
+  Widget _buildPlayerControls(BuildContext context, PlayerState state) {
+    final cubit = context.read<PlayerCubit>();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Scrub Bar
+          Slider(
+            min: 0,
+            max: state.duration.inSeconds.toDouble(),
+            value: state.position.inSeconds
+                .clamp(0, state.duration.inSeconds)
+                .toDouble(),
+            onChanged: (value) {
+              final position = Duration(seconds: value.toInt());
+              cubit.seek(position);
+            },
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(_formatDuration(state.position)),
+                Text(_formatDuration(state.duration)),
+              ],
+            ),
+          ),
+
+          // Controls Row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.replay_10),
+                onPressed: () {
+                  final newPos = state.position - const Duration(seconds: 10);
+                  cubit.seek(newPos < Duration.zero ? Duration.zero : newPos);
+                },
+              ),
+              const SizedBox(width: 16),
+              CircleAvatar(
+                radius: 30,
+                backgroundColor: Theme.of(context).primaryColor,
+                foregroundColor: Colors.white,
+                child: IconButton(
+                  icon: Icon(state.isPlaying ? Icons.pause : Icons.play_arrow),
+                  iconSize: 32,
+                  onPressed: () {
+                    if (state.isPlaying) {
+                      cubit.pause();
+                    } else if (state.currentPodcast != null) {
+                      cubit.resume();
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              IconButton(
+                icon: const Icon(Icons.forward_30),
+                onPressed: () {
+                  final newPos = state.position + const Duration(seconds: 30);
+                  final max = state.duration;
+                  cubit.seek(newPos > max ? max : newPos);
+                },
+              ),
+            ],
+          ),
+
+          // Speed & Volume Toggle
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.speed),
+                onPressed: () => _showSpeedDialog(context, state.playbackSpeed),
+              ),
+              IconButton(
+                icon: const Icon(Icons.volume_up),
+                onPressed: () => _showVolumeDialog(context, state.volume),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
-  @override
-  void dispose() {
-    _playerStateSubscription?.cancel();
-    _durationSubscription?.cancel();
-    _positionSubscription?.cancel();
-    _audioPlayer.dispose();
-    super.dispose();
+  void _showSpeedDialog(BuildContext context, double currentSpeed) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) {
+        // Use new context if needed, but safe to use parent context for logic
+        return SizedBox(
+          height: 200,
+          child: Column(
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  "재생 속도",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: _speedOptions.map((speed) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: ChoiceChip(
+                        label: Text('${speed}x'),
+                        selected: currentSpeed == speed,
+                        onSelected: (selected) {
+                          if (selected) {
+                            context.read<PlayerCubit>().setSpeed(speed);
+                            Navigator.pop(context);
+                          }
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showVolumeDialog(BuildContext context, double currentVolume) {
+    showDialog(
+      context: context,
+      builder: (_) {
+        return AlertDialog(
+          title: const Text("볼륨 조절"),
+          content: SizedBox(
+            height: 50,
+            child: StatefulBuilder(
+              builder: (context, setStateLocal) {
+                return Slider(
+                  value: currentVolume,
+                  min: 0,
+                  max: 1,
+                  onChanged: (val) {
+                    // Optimistic update local
+                    setStateLocal(() => currentVolume = val);
+                    // Actual update
+                    context.read<PlayerCubit>().setVolume(val);
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("닫기"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildPlaylist(BuildContext context, Podcast? currentPodcast) {
+    return BlocBuilder<PlaylistCubit, PlaylistState>(
+      builder: (context, state) {
+        if (state.playlist.isEmpty) {
+          return const Center(child: Text("재생목록이 비어있습니다."));
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                "재생목록 (${state.playlist.length})",
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                ),
+              ),
+            ),
+            Expanded(
+              child: ReorderableListView.builder(
+                itemCount: state.playlist.length,
+                onReorder: (oldIndex, newIndex) {
+                  context.read<PlaylistCubit>().reorderPlaylist(
+                    oldIndex,
+                    newIndex,
+                  );
+                },
+                itemBuilder: (context, index) {
+                  final podcast = state.playlist[index];
+                  final isCurrent = podcast == currentPodcast;
+
+                  return ListTile(
+                    key: ValueKey("${podcast.metadata.title}_$index"),
+                    dense: true,
+                    selected: isCurrent,
+                    selectedTileColor: Theme.of(
+                      context,
+                    ).primaryColor.withValues(alpha: 0.1),
+                    leading: Icon(
+                      isCurrent ? Icons.graphic_eq : Icons.music_note,
+                      color: isCurrent
+                          ? Theme.of(context).primaryColor
+                          : Colors.grey,
+                    ),
+                    title: Text(
+                      podcast.metadata.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: isCurrent
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                        color: isCurrent
+                            ? Theme.of(context).primaryColor
+                            : null,
+                      ),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () => context
+                              .read<PlaylistCubit>()
+                              .removeFromPlaylist(podcast),
+                        ),
+                        const Icon(Icons.drag_handle, color: Colors.grey),
+                      ],
+                    ),
+                    onTap: () {
+                      context.read<PlayerCubit>().play(podcast);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   String _formatDuration(Duration duration) {
@@ -95,122 +406,5 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final minutes = twoDigits(duration.inMinutes.remainder(60));
     final seconds = twoDigits(duration.inSeconds.remainder(60));
     return "${twoDigits(duration.inHours)}:$minutes:$seconds";
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(widget.title ?? 'Podcast Player')),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.music_note, size: 120, color: Colors.deepPurple),
-            const SizedBox(height: 32),
-            Text(
-              widget.title ?? "No Episode Selected",
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-            Slider(
-              min: 0,
-              max: _duration.inSeconds.toDouble(),
-              value: _position.inSeconds.toDouble(),
-              onChanged: (value) async {
-                final position = Duration(seconds: value.toInt());
-                await _audioPlayer.seek(position);
-              },
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(_formatDuration(_position)),
-                  Text(_formatDuration(_duration)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            // Volume Control
-            Row(
-              children: [
-                const Icon(Icons.volume_down, color: Colors.deepPurple),
-                Expanded(
-                  child: Slider(
-                    min: 0,
-                    max: 1,
-                    value: _volume,
-                    activeColor: Colors.deepPurple,
-                    onChanged: (value) async {
-                      setState(() {
-                        _volume = value;
-                      });
-                      await _audioPlayer.setVolume(value);
-                    },
-                  ),
-                ),
-                const Icon(Icons.volume_up, color: Colors.deepPurple),
-              ],
-            ),
-            const SizedBox(height: 24),
-            CircleAvatar(
-              radius: 35,
-              child: IconButton(
-                icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
-                iconSize: 40,
-                onPressed: () async {
-                  if (_isPlaying) {
-                    await _audioPlayer.pause();
-                  } else {
-                    // Resume or Play
-                    // For Mock, this won't work without a real file.
-                    // In real integration, we will path the URL.
-                    await _audioPlayer.resume();
-                  }
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Playback Speed Control
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.speed, color: Colors.deepPurple),
-                const SizedBox(width: 8),
-                DropdownButton<double>(
-                  value: _playbackSpeed,
-                  underline: Container(),
-                  items: _speedOptions.map((speed) {
-                    return DropdownMenuItem(
-                      value: speed,
-                      child: Text(
-                        '${speed}x',
-                        style: TextStyle(
-                          fontWeight: speed == _playbackSpeed
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                          color: Colors.deepPurple,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (value) async {
-                    if (value != null) {
-                      setState(() {
-                        _playbackSpeed = value;
-                      });
-                      await _audioPlayer.setPlaybackRate(value);
-                    }
-                  },
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

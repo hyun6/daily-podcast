@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../models/podcast.dart';
-import '../providers/podcast_provider.dart';
+import '../cubits/generation/generation_cubit.dart';
+import '../cubits/generation/generation_state.dart';
+import '../cubits/content/content_cubit.dart';
+import '../cubits/content/content_state.dart';
+import '../cubits/player/player_cubit.dart';
 import 'player_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -79,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ).showSnackBar(const SnackBar(content: Text('URL을 입력해주세요.')));
       return;
     }
-    context.read<PodcastProvider>().generateScriptOnly([source]);
+    context.read<GenerationCubit>().generateScript([source]);
   }
 
   void _generatePodcast() {
@@ -90,48 +94,45 @@ class _HomeScreenState extends State<HomeScreen> {
       ).showSnackBar(const SnackBar(content: Text('URL을 입력해주세요.')));
       return;
     }
-    context.read<PodcastProvider>().generatePodcast([source]);
+    context.read<GenerationCubit>().generatePodcast([source]);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('New Podcast')),
-      body: Consumer<PodcastProvider>(
-        builder: (context, provider, child) {
-          // Show loading for direct podcast generation
-          if (provider.isLoading) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text("팟캐스트 생성 중..."),
-                  SizedBox(height: 8),
-                  Text(
-                    "스크립트 작성 및 오디오 생성",
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ],
+      body: BlocConsumer<GenerationCubit, GenerationState>(
+        listener: (context, state) {
+          if (state is GenerationError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: Colors.red,
               ),
             );
           }
-
-          // Show loading for script-only generation
-          if (provider.isGeneratingScript) {
-            return const Center(
+          if (state is GenerationPodcastSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("팟캐스트 생성 완료! 라이브러리에 추가되었습니다.")),
+            );
+            // Content refresh is handled by MainScreen coordinator
+          }
+          if (state is GenerationScriptSuccess) {
+            // Maybe switch tab?
+          }
+        },
+        builder: (context, genState) {
+          if (genState is GenerationLoading) {
+            return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text("스크립트 생성 중..."),
-                  SizedBox(height: 8),
-                  Text(
-                    "AI가 대본을 작성하고 있습니다",
-                    style: TextStyle(color: Colors.grey),
-                  ),
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(genState.message ?? "처리 중..."),
+                  const SizedBox(height: 8),
+                  if (genState.progress > 0)
+                    Text("진행률: ${(genState.progress * 100).toInt()}%"),
                 ],
               ),
             );
@@ -142,243 +143,165 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (provider.error != null)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red.shade300),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.error_outline, color: Colors.red.shade700),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            provider.error!,
-                            style: TextStyle(color: Colors.red.shade900),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => provider.clearError(),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                      ],
-                    ),
-                  ),
-                // URL 입력 (먼저)
-                TextField(
-                  controller: _urlController,
-                  decoration: InputDecoration(
-                    labelText: 'URL',
-                    hintText: 'https://...',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.link),
-                    suffixIcon: _urlController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              _urlController.clear();
-                              setState(() => _isAutoDetected = false);
-                            },
-                          )
-                        : null,
-                  ),
-                  keyboardType: TextInputType.url,
-                  textInputAction: TextInputAction.next,
-                ),
-                const SizedBox(height: 16),
+                // Inputs
+                _buildInputSection(),
 
-                // 소스 타입 (자동 감지 표시)
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: _selectedType,
-                        decoration: InputDecoration(
-                          labelText: 'Source Type',
-                          suffixIcon: _isAutoDetected
-                              ? Tooltip(
-                                  message: 'URL에서 자동 감지됨',
-                                  child: Icon(
-                                    Icons.auto_awesome,
-                                    size: 18,
-                                    color: Theme.of(context).primaryColor,
-                                  ),
-                                )
-                              : null,
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'web',
-                            child: Text('Web Page / Blog'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'rss',
-                            child: Text('RSS Feed'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'youtube',
-                            child: Text('YouTube Video'),
-                          ),
-                        ],
-                        onChanged: (val) {
-                          setState(() {
-                            _selectedType = val!;
-                            _isAutoDetected = false;
-                          });
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // 소스 이름 (선택적)
-                TextField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Source Name (Optional)',
-                    hintText: '예: 기술 블로그, 뉴스 피드...',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.label_outline),
-                  ),
-                  textInputAction: TextInputAction.done,
-                ),
                 const SizedBox(height: 24),
 
-                // Two buttons: Script only vs Full podcast
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _generateScriptOnly,
-                        icon: const Icon(Icons.article),
-                        label: const Text('스크립트 생성'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.all(16),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _generatePodcast,
-                        icon: const Icon(Icons.auto_awesome),
-                        label: const Text('바로 생성'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.all(16),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                // Show script preview hint
-                if (provider.currentScript != null)
-                  Container(
-                    margin: const EdgeInsets.only(top: 16),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.green.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.check_circle, color: Colors.green.shade600),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            '스크립트가 생성되었습니다: "${provider.currentScript!.title}"',
-                            style: TextStyle(color: Colors.green.shade800),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: widget.onSwitchToScriptTab,
-                          child: const Text('보기'),
-                        ),
-                      ],
-                    ),
-                  ),
+                // Action Buttons
+                _buildActionButtons(),
 
                 const SizedBox(height: 32),
+
+                // Recent Episodes (from ContentCubit)
                 const Text(
                   "Recent Episodes",
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: provider.recentPodcasts.length,
-                    itemBuilder: (context, index) {
-                      final podcast = provider.recentPodcasts[index];
-                      return ListTile(
-                        leading: const Icon(Icons.podcasts),
-                        title: Text(podcast.metadata.title),
-                        subtitle: Text(
-                          "${podcast.metadata.createdAt.toString().split('.')[0]} • ${podcast.metadata.sourceNames.join(', ')}",
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.grey),
-                          onPressed: () async {
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text("에피소드 삭제"),
-                                content: const Text("정말 이 에피소드를 삭제하시겠습니까?"),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, false),
-                                    child: const Text("취소"),
-                                  ),
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, true),
-                                    child: const Text(
-                                      "삭제",
-                                      style: TextStyle(color: Colors.red),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-
-                            if (confirm == true) {
-                              if (!context.mounted) return;
-                              await context
-                                  .read<PodcastProvider>()
-                                  .deletePodcast(podcast);
-                            }
-                          },
-                        ),
-                        // Navigate to PlayerScreen
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => PlayerScreen(
-                                audioPath: podcast.filePath,
-                                title: podcast.metadata.title,
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
+                Expanded(child: _buildRecentEpisodes()),
               ],
             ),
           );
         },
       ),
+    );
+  }
+
+  Widget _buildInputSection() {
+    return Column(
+      children: [
+        TextField(
+          controller: _urlController,
+          decoration: InputDecoration(
+            labelText: 'URL',
+            hintText: 'https://...',
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.link),
+            suffixIcon: _urlController.text.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      _urlController.clear();
+                      setState(() => _isAutoDetected = false);
+                    },
+                  )
+                : null,
+          ),
+          keyboardType: TextInputType.url,
+          textInputAction: TextInputAction.next,
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                // ignore: deprecated_member_use
+                value: _selectedType,
+                decoration: InputDecoration(
+                  labelText: 'Source Type',
+                  suffixIcon: _isAutoDetected
+                      ? Tooltip(
+                          message: 'URL에서 자동 감지됨',
+                          child: Icon(
+                            Icons.auto_awesome,
+                            size: 18,
+                            color: Theme.of(context).primaryColor,
+                          ),
+                        )
+                      : null,
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'web',
+                    child: Text('Web Page / Blog'),
+                  ),
+                  DropdownMenuItem(value: 'rss', child: Text('RSS Feed')),
+                  DropdownMenuItem(
+                    value: 'youtube',
+                    child: Text('YouTube Video'),
+                  ),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    _selectedType = val!;
+                    _isAutoDetected = false;
+                  });
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _nameController,
+          decoration: const InputDecoration(
+            labelText: 'Source Name (Optional)',
+            hintText: '예: 기술 블로그, 뉴스 피드...',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.label_outline),
+          ),
+          textInputAction: TextInputAction.done,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _generateScriptOnly,
+            icon: const Icon(Icons.article),
+            label: const Text('스크립트 생성'),
+            style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(16)),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: _generatePodcast,
+            icon: const Icon(Icons.auto_awesome),
+            label: const Text('바로 생성'),
+            style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecentEpisodes() {
+    return BlocBuilder<ContentCubit, ContentState>(
+      builder: (context, state) {
+        if (state is ContentLoaded) {
+          if (state.podcasts.isEmpty) {
+            return const Center(child: Text("최근 에피소드가 없습니다."));
+          }
+          final recents = state.podcasts.take(5).toList(); // Show top 5
+          return ListView.builder(
+            itemCount: recents.length,
+            itemBuilder: (context, index) {
+              final podcast = recents[index];
+              return ListTile(
+                leading: const Icon(Icons.podcasts),
+                title: Text(podcast.metadata.title),
+                subtitle: Text(
+                  podcast.metadata.createdAt.toString().split(' ')[0],
+                  maxLines: 1,
+                ),
+                onTap: () {
+                  context.read<PlayerCubit>().play(podcast);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PlayerScreen()),
+                  );
+                },
+              );
+            },
+          );
+        }
+        return const Center(child: CircularProgressIndicator());
+      },
     );
   }
 }
