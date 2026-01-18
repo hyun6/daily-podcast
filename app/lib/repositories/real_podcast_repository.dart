@@ -66,7 +66,7 @@ class RealPodcastRepository implements PodcastRepository {
 
       return files.map((file) {
         return Podcast(
-          filePath: "${baseUrl.replaceAll("/api/v1", "")}/downloads/$file",
+          filePath: "${baseUrl.replaceAll("/api/v1", "")}/data/audio/$file",
           metadata: PodcastMetadata(
             title: file.toString(),
             sourceNames: [],
