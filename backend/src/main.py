@@ -25,6 +25,11 @@ app.include_router(api_router, prefix="/api/v1")
 os.makedirs(settings.DOWNLOADS_DIR, exist_ok=True)
 app.mount("/downloads", StaticFiles(directory=settings.DOWNLOADS_DIR), name="downloads")
 
+# Mount data directory for Podcastfy outputs
+DATA_DIR = "./data"
+os.makedirs(DATA_DIR, exist_ok=True)
+app.mount("/data", StaticFiles(directory=DATA_DIR), name="data")
+
 @app.get("/")
 def read_root():
     return {
