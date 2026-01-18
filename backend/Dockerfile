@@ -2,16 +2,20 @@ FROM python:3.11-slim
 
 # 시스템 의존성 설치
 # ffmpeg: 오디오 처리
-# mecab, libmecab-dev, mecab-ko-dic: 한국어 형태소 분석 (TTS/Text 처리용)
-# curl, git: 유틸리티
-RUN apt-get update && apt-get install -y \
+# 시스템 의존성 설치
+RUN apt-get update --allow-releaseinfo-change && apt-get install -y --no-install-recommends \
     ffmpeg \
     mecab \
     libmecab-dev \
-    mecab-ko-dic \
+    mecab-ipadic \
+    mecab-ipadic-utf8 \
     curl \
     git \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
+
+# mecab-ko-dic 설치 (옵션: 필요시 주석 해제)
+# RUN pip install mecab-ko-dic
 
 WORKDIR /app
 
