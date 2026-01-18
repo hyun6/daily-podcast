@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     # API Keys & External Services
     GEMINI_API_KEY: str = Field("TODO", description="Google Gemini API Key")
+    JINA_API_KEY: str = Field(None, description="Jina AI API Key (required for Podcastfy web scraping)")
     
     # Supabase (Optional - for cloud storage)
     SUPABASE_URL: str = Field("", description="Supabase Project URL")
