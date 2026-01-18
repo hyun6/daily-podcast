@@ -13,6 +13,8 @@ from datetime import datetime
 from podcastfy.client import generate_podcast
 from src.models import DialogueScript, DialogueLine
 from src.config import settings
+from src.storage_client import storage_client
+import uuid
 
 
 class PodcastfyClient:
@@ -74,10 +76,28 @@ class PodcastfyClient:
             tts_model=tts_engine
         )
         
+        
         # 가장 최근 transcript 파일 찾기
         transcript_path = self._find_latest_transcript()
         script = self._parse_transcript(transcript_path)
         
+        # Supabase Storage가 활성화되어 있으면 업로드
+        if storage_client.is_enabled():
+            try:
+                # UUID로 파일명 생성 (충돌 방지 및 보안)
+                remote_name = f"{uuid.uuid4()}.mp3"
+                print(f"[INFO] Uploading audio to Supabase: {remote_name}")
+                audio_url = storage_client.upload_audio(audio_file, remote_name)
+                
+                # 로컬 파일 정리
+                if os.path.exists(audio_file):
+                    os.remove(audio_file)
+                
+                audio_file = audio_url
+                print(f"[INFO] Upload successful: {audio_file}")
+            except Exception as e:
+                print(f"[ERROR] Upload failed, keeping local file: {e}")
+
         return audio_file, script
     
     def generate_from_text(
@@ -104,6 +124,19 @@ class PodcastfyClient:
         transcript_path = self._find_latest_transcript()
         script = self._parse_transcript(transcript_path)
         
+        # Supabase Storage가 활성화되어 있으면 업로드
+        if storage_client.is_enabled():
+            try:
+                remote_name = f"{uuid.uuid4()}.mp3"
+                audio_url = storage_client.upload_audio(audio_file, remote_name)
+                
+                if os.path.exists(audio_file):
+                    os.remove(audio_file)
+                
+                audio_file = audio_url
+            except Exception as e:
+                print(f"[ERROR] Upload failed: {e}")
+
         return audio_file, script
     
     def generate_script_only(
@@ -156,6 +189,19 @@ class PodcastfyClient:
             tts_model=tts_engine
         )
         
+        # Supabase Storage가 활성화되어 있으면 업로드
+        if storage_client.is_enabled():
+            try:
+                remote_name = f"{uuid.uuid4()}.mp3"
+                audio_url = storage_client.upload_audio(audio_file, remote_name)
+                
+                if os.path.exists(audio_file):
+                    os.remove(audio_file)
+                
+                audio_file = audio_url
+            except Exception as e:
+                print(f"[ERROR] Upload failed: {e}")
+
         return audio_file
     
     def _find_latest_transcript(self) -> str:

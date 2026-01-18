@@ -50,8 +50,11 @@ async def generate_episode(request: ProcessingRequest):
         )
         
         # Sanitize path for URL usage (remove leading ./)
-        if audio_path and audio_path.startswith("./"):
-            audio_path = audio_path[2:]
+        # Sanitize path for URL usage (remove leading ./)
+        if audio_path:
+            if audio_path.startswith("./"):
+                audio_path = audio_path[2:]
+            # If it's a full URL (Supabase), keep it as is
             
         print(f"[INFO] Podcast generated: {audio_path}")
         

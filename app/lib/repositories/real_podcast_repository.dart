@@ -46,8 +46,7 @@ class RealPodcastRepository implements PodcastRepository {
       );
 
       return Podcast(
-        filePath:
-            "${baseUrl.replaceAll("/api/v1", "")}/${data['file_path']}", // Assuming file is served statically or via another endpoint
+        filePath: _buildAudioUrl(data['file_path']),
         metadata: metadata,
         ttsEngineUsed: data['tts_engine_used'],
       );
@@ -66,7 +65,7 @@ class RealPodcastRepository implements PodcastRepository {
 
       return files.map((file) {
         return Podcast(
-          filePath: "${baseUrl.replaceAll("/api/v1", "")}/data/audio/$file",
+          filePath: _buildAudioUrl("data/audio/$file"),
           metadata: PodcastMetadata(
             title: file.toString(),
             sourceNames: [],
@@ -111,7 +110,7 @@ class RealPodcastRepository implements PodcastRepository {
       );
 
       final data = response.data;
-      return "${baseUrl.replaceAll("/api/v1", "")}/${data['file_path']}";
+      return _buildAudioUrl(data['file_path']);
     } catch (e) {
       throw Exception('Failed to generate audio: $e');
     }
@@ -141,8 +140,7 @@ class RealPodcastRepository implements PodcastRepository {
 
       // Convert relative path to full URL if result exists
       if (taskStatus.result != null && !taskStatus.result!.startsWith('http')) {
-        final fullUrl =
-            "${baseUrl.replaceAll("/api/v1", "")}/${taskStatus.result}";
+        final fullUrl = _buildAudioUrl(taskStatus.result!);
         return TaskStatus(
           taskId: taskStatus.taskId,
           status: taskStatus.status,
@@ -164,5 +162,14 @@ class RealPodcastRepository implements PodcastRepository {
     } catch (e) {
       throw Exception('Failed to cancel task: $e');
     }
+  }
+
+  String _buildAudioUrl(String path) {
+    // If it's already an absolute URL (e.g. Supabase Storage), return it as is
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+    // Otherwise, append the base path (for local dev)
+    return "${baseUrl.replaceAll("/api/v1", "")}/$path";
   }
 }

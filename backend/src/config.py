@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     # API Keys & External Services
     GEMINI_API_KEY: str = Field("TODO", description="Google Gemini API Key")
     
+    # Supabase (Optional - for cloud storage)
+    SUPABASE_URL: str = Field("", description="Supabase Project URL")
+    SUPABASE_KEY: str = Field("", description="Supabase anon/public key")
+    
     # Paths
     DATA_DIR: str = "data"
     DOWNLOADS_DIR: str = "downloads"

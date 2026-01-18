@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: daily-podcast-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false  # Dashboard에서 직접 설정
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: ENV
+        value: production
+      - key: TTS_ENGINE
+        value: edge-tts
+    healthCheckPath: /health
+    autoDeploy: true
