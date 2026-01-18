@@ -1,15 +1,19 @@
 import 'package:equatable/equatable.dart';
 import '../../models/podcast.dart';
 
+enum PlayerStatus { initial, playing, paused, stopped, completed }
+
 class PlayerState extends Equatable {
+  final PlayerStatus status;
   final Podcast? currentPodcast;
-  final bool isPlaying;
+  final bool isPlaying; // Keep for convenience, but status is primary
   final Duration position;
   final Duration duration;
   final double playbackSpeed;
   final double volume;
 
   const PlayerState({
+    this.status = PlayerStatus.initial,
     this.currentPodcast,
     this.isPlaying = false,
     this.position = Duration.zero,
@@ -19,6 +23,7 @@ class PlayerState extends Equatable {
   });
 
   PlayerState copyWith({
+    PlayerStatus? status,
     Podcast? currentPodcast,
     bool? isPlaying,
     Duration? position,
@@ -27,6 +32,7 @@ class PlayerState extends Equatable {
     double? volume,
   }) {
     return PlayerState(
+      status: status ?? this.status,
       currentPodcast: currentPodcast ?? this.currentPodcast,
       isPlaying: isPlaying ?? this.isPlaying,
       position: position ?? this.position,
@@ -38,6 +44,7 @@ class PlayerState extends Equatable {
 
   @override
   List<Object?> get props => [
+    status,
     currentPodcast,
     isPlaying,
     position,

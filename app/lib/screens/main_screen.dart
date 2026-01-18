@@ -3,6 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../cubits/generation/generation_cubit.dart';
 import '../cubits/generation/generation_state.dart';
 import '../cubits/content/content_cubit.dart';
+import '../cubits/player/player_cubit.dart';
+import '../cubits/player/player_state.dart';
+import '../cubits/playlist/playlist_cubit.dart';
 import 'home_screen.dart';
 import 'content_screen.dart';
 import 'player_screen.dart';
@@ -34,13 +37,34 @@ class _MainScreenState extends State<MainScreen> {
     ];
 
     // Coordinator: Listen for GenerationCubit success and refresh ContentCubit
-    return BlocListener<GenerationCubit, GenerationState>(
-      listenWhen: (previous, current) => current is GenerationPodcastSuccess,
-      listener: (context, state) {
-        if (state is GenerationPodcastSuccess) {
-          context.read<ContentCubit>().fetchContent();
-        }
-      },
+    // Coordinator: Listen for PlayerCubit completion and play next track
+    return MultiBlocListener(
+      listeners: [
+        BlocListener<GenerationCubit, GenerationState>(
+          listenWhen: (prev, curr) => curr is GenerationPodcastSuccess,
+          listener: (context, state) {
+            context.read<ContentCubit>().fetchContent();
+          },
+        ),
+        BlocListener<PlayerCubit, PlayerState>(
+          listenWhen: (prev, curr) =>
+              prev.status != PlayerStatus.completed &&
+              curr.status == PlayerStatus.completed,
+          listener: (context, state) {
+            final playlistCubit = context.read<PlaylistCubit>();
+            final playlist = playlistCubit.state.playlist;
+            final current = state.currentPodcast;
+
+            if (current != null && playlist.isNotEmpty) {
+              final currentIndex = playlist.indexOf(current);
+              if (currentIndex != -1 && currentIndex < playlist.length - 1) {
+                final nextPodcast = playlist[currentIndex + 1];
+                context.read<PlayerCubit>().play(nextPodcast);
+              }
+            }
+          },
+        ),
+      ],
       child: Scaffold(
         body: screens[_selectedIndex],
         bottomNavigationBar: NavigationBar(

@@ -24,7 +24,29 @@ class PlayerCubit extends Cubit<PlayerState> {
     _playerStateSubscription = _audioPlayerService.onPlayerStateChanged.listen((
       pState,
     ) {
-      emit(state.copyWith(isPlaying: pState == ap.PlayerState.playing));
+      PlayerStatus status;
+      switch (pState) {
+        case ap.PlayerState.playing:
+          status = PlayerStatus.playing;
+          break;
+        case ap.PlayerState.paused:
+          status = PlayerStatus.paused;
+          break;
+        case ap.PlayerState.stopped:
+          status = PlayerStatus.stopped;
+          break;
+        case ap.PlayerState.completed:
+          status = PlayerStatus.completed;
+          break;
+        default:
+          status = PlayerStatus.initial;
+      }
+      emit(
+        state.copyWith(
+          status: status,
+          isPlaying: pState == ap.PlayerState.playing,
+        ),
+      );
     });
 
     _durationSubscription = _audioPlayerService.onDurationChanged.listen((d) {
@@ -39,7 +61,13 @@ class PlayerCubit extends Cubit<PlayerState> {
       if (state.currentPodcast != null && onPodcastComplete != null) {
         onPodcastComplete!(state.currentPodcast!);
       }
-      emit(state.copyWith(isPlaying: false, position: Duration.zero));
+      emit(
+        state.copyWith(
+          status: PlayerStatus.completed,
+          isPlaying: false,
+          position: Duration.zero,
+        ),
+      );
     });
   }
 
