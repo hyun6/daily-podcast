@@ -25,6 +25,14 @@ class PodcastMetadata {
       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'sources': sourceNames,
+      'created_at': createdAt.toIso8601String(),
+    };
+  }
 }
 
 class Podcast {
@@ -39,4 +47,32 @@ class Podcast {
     this.isGenerating = false,
     this.ttsEngineUsed,
   });
+
+  factory Podcast.fromJson(Map<String, dynamic> json) {
+    return Podcast(
+      filePath: json['filePath'],
+      metadata: PodcastMetadata.fromJson(json['metadata'] ?? {}),
+      isGenerating: false, // Don't persist generating state
+      ttsEngineUsed: json['ttsEngineUsed'],
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'filePath': filePath,
+      'metadata': metadata.toJson(),
+      'ttsEngineUsed': ttsEngineUsed,
+    };
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Podcast &&
+          runtimeType == other.runtimeType &&
+          filePath == other.filePath &&
+          metadata.title == other.metadata.title;
+
+  @override
+  int get hashCode => filePath.hashCode ^ metadata.title.hashCode;
 }

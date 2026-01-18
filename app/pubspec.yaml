@@ -40,9 +40,10 @@ dependencies:
   path_provider: ^2.1.5
   shared_preferences: ^2.5.4
   path: ^1.9.1
-  flutter_bloc: ^9.1.1
+  flutter_bloc: ^8.1.6
   equatable: ^2.0.8
   flutter_dotenv: ^5.2.1
+  hydrated_bloc: ^9.1.5
 
 dev_dependencies:
   flutter_test:

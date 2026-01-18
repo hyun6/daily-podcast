@@ -14,6 +14,10 @@ import 'cubits/generation/generation_cubit.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import 'package:flutter/foundation.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
+import 'package:path_provider/path_provider.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Load .env file.
@@ -23,6 +27,13 @@ void main() async {
   } catch (e) {
     debugPrint("Warning: .env file not found. Using default values.");
   }
+
+  HydratedBloc.storage = await HydratedStorage.build(
+    storageDirectory: kIsWeb
+        ? HydratedStorage.webStorageDirectory
+        : await getApplicationDocumentsDirectory(),
+  );
+
   runApp(const DailyPodcastApp());
 }
 
