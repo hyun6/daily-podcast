@@ -17,5 +17,8 @@ if ! command -v uv &> /dev/null; then
     exit 1
 fi
 
+# Enable MPS fallback for PyTorch (Required for some ops like aten::angle on Mac)
+export PYTORCH_ENABLE_MPS_FALLBACK=1
+
 echo "Running FastAPI server..."
 uv run uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
