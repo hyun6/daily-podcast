@@ -231,6 +231,8 @@ class PodcastfyClient:
             text = text.strip()
             # 닫는 태그 제거
             text = re.sub(r'</Person\d>', '', text).strip()
+            # <lang> 태그 제거
+            text = re.sub(r'<lang xml:lang="[^"]*">', '', text).strip()
             
             if text:
                 speaker = self.speaker_map.get(speaker_tag, speaker_tag)
