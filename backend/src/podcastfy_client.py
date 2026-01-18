@@ -79,7 +79,8 @@ class PodcastfyClient:
         audio_file = generate_podcast(
             urls=urls,
             conversation_config=self.conversation_config,
-            tts_model=tts_engine
+            tts_model=tts_engine,
+            llm_model_name="gemini-2.0-flash-exp"
         )
         
         
@@ -124,7 +125,8 @@ class PodcastfyClient:
         audio_file = generate_podcast(
             text=text,
             conversation_config=self.conversation_config,
-            tts_model=tts_engine
+            tts_model=tts_engine,
+            llm_model_name="gemini-2.0-flash-exp"
         )
         
         transcript_path = self._find_latest_transcript()
@@ -164,7 +166,8 @@ class PodcastfyClient:
             urls=urls,
             text=text,
             conversation_config=self.conversation_config,
-            transcript_only=True
+            transcript_only=True,
+            llm_model_name="gemini-2.0-flash-exp"
         )
         
         transcript_path = self._find_latest_transcript()
