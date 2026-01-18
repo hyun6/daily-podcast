@@ -26,4 +26,6 @@ abstract class PodcastRepository {
 
   /// Cancel an async task
   Future<void> cancelTask(String taskId);
+
+  Future<void> deleteEpisode(String filePath);
 }

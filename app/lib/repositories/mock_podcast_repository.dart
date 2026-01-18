@@ -102,4 +102,10 @@ class MockPodcastRepository implements PodcastRepository {
   Future<void> cancelTask(String taskId) async {
     // Mock cancellation
   }
+
+  @override
+  Future<void> deleteEpisode(String filePath) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    // Mock deletion success
+  }
 }

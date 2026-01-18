@@ -324,6 +324,40 @@ class _HomeScreenState extends State<HomeScreen> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.grey),
+                          onPressed: () async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text("에피소드 삭제"),
+                                content: const Text("정말 이 에피소드를 삭제하시겠습니까?"),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, false),
+                                    child: const Text("취소"),
+                                  ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    child: const Text(
+                                      "삭제",
+                                      style: TextStyle(color: Colors.red),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+
+                            if (confirm == true) {
+                              if (!context.mounted) return;
+                              await context
+                                  .read<PodcastProvider>()
+                                  .deletePodcast(podcast);
+                            }
+                          },
+                        ),
                         // Navigate to PlayerScreen
                         onTap: () {
                           Navigator.push(

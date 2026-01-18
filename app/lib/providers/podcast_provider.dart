@@ -242,4 +242,21 @@ class PodcastProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<void> deletePodcast(Podcast podcast) async {
+    if (podcast.filePath == null) {
+      _recentPodcasts.remove(podcast);
+      notifyListeners();
+      return;
+    }
+
+    try {
+      await _repository.deleteEpisode(podcast.filePath!);
+      _recentPodcasts.remove(podcast);
+      notifyListeners();
+    } catch (e) {
+      _error = "에피소드 삭제 실패: $e";
+      notifyListeners();
+    }
+  }
 }

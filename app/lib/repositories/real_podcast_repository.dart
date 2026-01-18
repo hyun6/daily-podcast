@@ -164,6 +164,25 @@ class RealPodcastRepository implements PodcastRepository {
     }
   }
 
+  @override
+  Future<void> deleteEpisode(String filePath) async {
+    try {
+      // url에서 파일명 추출
+      // 예: http://localhost:8000/data/audio/file.mp3 -> file.mp3
+      // 예: https://supabulabla.../file.mp3 -> file.mp3
+      final uri = Uri.parse(filePath);
+      final filename = uri.pathSegments.last;
+
+      if (filename.isEmpty) {
+        throw Exception("Invalid content path");
+      }
+
+      await _dio.delete('/api/v1/episodes/$filename');
+    } catch (e) {
+      throw Exception('Failed to delete episode: $e');
+    }
+  }
+
   String _buildAudioUrl(String path) {
     // If it's already an absolute URL (e.g. Supabase Storage), return it as is
     if (path.startsWith('http://') || path.startsWith('https://')) {

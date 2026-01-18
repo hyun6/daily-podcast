@@ -12,6 +12,8 @@ import os
 from datetime import datetime
 import asyncio
 
+from src.storage_client import storage_client  # Import storage_client
+
 router = APIRouter()
 
 # Initialize Podcastfy client
@@ -195,6 +197,53 @@ async def run_tts_task(task_id: str, script: DialogueScript, engine_name: Option
         task.progress = 1.0
         
     except Exception as e:
-        print(f"[Task {task_id}] Error: {e}")
-        task.error = str(e)
         task.set_status("failed")
+
+
+@router.delete("/episodes/{filename}")
+async def delete_episode(filename: str):
+    """
+    Delete a podcast episode.
+    Removes the file from local storage and Supabase storage if applicable.
+    """
+    deleted = False
+    error_msg = ""
+
+    # 1. Try deleting from local storage
+    local_path = os.path.join("./data/audio", filename)
+    if os.path.exists(local_path):
+        try:
+            os.remove(local_path)
+            deleted = True
+            print(f"[INFO] Deleted local file: {local_path}")
+        except Exception as e:
+            print(f"[ERROR] Failed to delete local file: {e}")
+            error_msg += f"Local delete failed: {str(e)}; "
+
+    # 2. Try deleting from Supabase
+    if storage_client.is_enabled():
+        try:
+            # Assuming filename is the remote name in Supabase
+            if storage_client.delete_audio(filename):
+                deleted = True
+                print(f"[INFO] Deleted from Supabase: {filename}")
+            else:
+                 # It might not exist in Supabase, which is fine if we deleted it locally
+                 pass
+        except Exception as e:
+            print(f"[ERROR] Failed to delete from Supabase: {e}")
+            error_msg += f"Supabase delete failed: {str(e)}; "
+
+    if deleted:
+        return {"message": f"Episode {filename} deleted successfully", "details": error_msg}
+    else:
+        # If we couldn't delete it from anywhere (and it didn't exist locally), return 404
+        if not os.path.exists(local_path) and not storage_client.is_enabled():
+             raise HTTPException(status_code=404, detail="Episode not found")
+        
+        # If we tried but failed
+        if error_msg:
+             raise HTTPException(status_code=500, detail=f"Failed to delete episode: {error_msg}")
+        
+        # If file didn't exist locally and Supabase returns false (or disabled)
+        raise HTTPException(status_code=404, detail="Episode not found")
