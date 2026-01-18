@@ -55,3 +55,17 @@ class AudioResponse(BaseModel):
     """Response for audio generation from script."""
     file_path: str
     tts_engine_used: Optional[str] = None
+
+# --- Task Models ---
+
+class TaskStatusResponse(BaseModel):
+    task_id: str
+    status: str
+    progress: float
+    result: Optional[str] = None
+    error: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+class AsyncTaskResponse(BaseModel):
+    task_id: str

@@ -1,13 +1,20 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-from src.models import ProcessingRequest, PodcastEpisode, PodcastMetadata, ScriptResponse, AudioFromScriptRequest, AudioResponse, DialogueScript
+from typing import List, Optional, Callable
+from src.models import (
+    ProcessingRequest, PodcastEpisode, PodcastMetadata, ScriptResponse, 
+    AudioFromScriptRequest, AudioResponse, DialogueScript,
+    AsyncTaskResponse, TaskStatusResponse
+)
 from src.fetcher.text_fetchers import RSSFetcher, WebFetcher
 from src.fetcher.youtube_fetcher import YouTubeFetcher
 from src.writer.llm_client import GeminiClient
 from src.writer.mock_client import MockGeminiClient
 from src.audio.tts_engine import TTSEngine
+from src.audio.task_manager import task_manager
 from src.config import settings
 import os
 from datetime import datetime
+import asyncio
 
 router = APIRouter()
 
@@ -168,3 +175,63 @@ async def generate_audio_from_script(request: AudioFromScriptRequest):
         file_path=audio_path,
         tts_engine_used=engine_used
     )
+
+@router.post("/generate-audio-async", response_model=AsyncTaskResponse, status_code=202)
+async def generate_audio_async(request: AudioFromScriptRequest, background_tasks: BackgroundTasks):
+    """
+    Start audio generation asynchronously. Returns a task ID.
+    """
+    task_id = task_manager.create_task()
+    
+    background_tasks.add_task(
+        run_tts_task,
+        task_id,
+        request.script,
+        request.tts_engine
+    )
+    
+    return AsyncTaskResponse(task_id=task_id)
+
+@router.get("/tasks/{task_id}", response_model=TaskStatusResponse)
+async def get_task_status(task_id: str):
+    task = task_manager.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task.to_status_model()
+
+@router.post("/tasks/{task_id}/cancel")
+async def cancel_task(task_id: str):
+    if task_manager.cancel_task(task_id):
+        return {"message": "Task cancellation requested"}
+    raise HTTPException(status_code=404, detail="Task not found or cannot be cancelled")
+
+async def run_tts_task(task_id: str, script: DialogueScript, engine_name: Optional[str]):
+    task = task_manager.get_task(task_id)
+    if not task:
+        return
+
+    try:
+        task.set_status("running")
+        
+        def progress_callback(p):
+            task.update_progress(p)
+
+        audio_path, engine_used = await tts_engine.generate_audio(
+            script,
+            tts_engine=engine_name,
+            progress_callback=progress_callback,
+            cancel_event=task.cancellation_event
+        )
+        
+        if task.status == "cancelled":
+            print(f"[Task {task_id}] Task was cancelled, ignoring result.")
+            return
+
+        task.result = audio_path
+        task.set_status("completed")
+        task.progress = 1.0
+        
+    except Exception as e:
+        print(f"[Task {task_id}] Error: {e}")
+        task.error = str(e)
+        task.set_status("failed")
