@@ -106,6 +106,10 @@ class MockPodcastRepository implements PodcastRepository {
   @override
   Future<void> deleteEpisode(String filePath) async {
     await Future.delayed(const Duration(milliseconds: 500));
-    // Mock deletion success
+  }
+
+  @override
+  Future<bool> healthCheck() async {
+    return true;
   }
 }

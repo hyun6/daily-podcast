@@ -183,6 +183,16 @@ class RealPodcastRepository implements PodcastRepository {
     }
   }
 
+  @override
+  Future<bool> healthCheck() async {
+    try {
+      final response = await _dio.get('/health');
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
   String _buildAudioUrl(String path) {
     // If it's already an absolute URL (e.g. Supabase Storage), return it as is
     if (path.startsWith('http://') || path.startsWith('https://')) {

@@ -28,4 +28,7 @@ abstract class PodcastRepository {
   Future<void> cancelTask(String taskId);
 
   Future<void> deleteEpisode(String filePath);
+
+  /// Check backend health
+  Future<bool> healthCheck();
 }

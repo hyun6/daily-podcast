@@ -13,10 +13,22 @@ class ContentCubit extends Cubit<ContentState> {
   Future<void> fetchContent() async {
     emit(ContentLoading());
     try {
+      // 렌더 콜드 스타트 대응: 헬스 체크 확인
+      bool isHealthy = await _repository.healthCheck();
+
+      // 최대 3번 재시도 (각 2초 대기)
+      if (!isHealthy) {
+        for (int i = 0; i < 3; i++) {
+          await Future.delayed(const Duration(seconds: 2));
+          isHealthy = await _repository.healthCheck();
+          if (isHealthy) break;
+        }
+      }
+
       final podcasts = await _repository.getRecentPodcasts();
       emit(ContentLoaded(podcasts));
     } catch (e) {
-      emit(ContentError("Failed to fetch content: $e"));
+      emit(ContentError("서버 연결 실패. 잠시 후 다시 시도해주세요. ($e)"));
     }
   }
 
