@@ -9,15 +9,147 @@ from src.podcastfy_client import PodcastfyClient
 from src.audio.task_manager import task_manager
 from src.config import settings
 import os
+import uuid
 from datetime import datetime
 import asyncio
+from pydub import AudioSegment
 
-from src.storage_client import storage_client  # Import storage_client
+from src.storage_client import storage_client
+from src.audio.qwen_handler import QwenTTSHandler
 
 router = APIRouter()
 
 # Initialize Podcastfy client
 podcastfy_client = PodcastfyClient()
+
+def get_reference_audio(speaker_name: str) -> str:
+    """Get the reference audio path for a given speaker."""
+    base_dir = os.path.join(os.path.dirname(__file__), "../data/voices")
+    # Default mapping based on generated references
+    if "Host B" in speaker_name or "Person2" in speaker_name:
+        return os.path.abspath(os.path.join(base_dir, "host_b.wav"))
+    return os.path.abspath(os.path.join(base_dir, "host_a.wav"))
+
+
+def split_text_into_chunks(text: str, max_length: int = 150) -> List[str]:
+    """Split text into smaller chunks by semantic boundaries."""
+    if not text:
+        return []
+    
+    # If text is short enough, return as is
+    if len(text) <= max_length:
+        return [text]
+        
+    chunks = []
+    current_chunk = ""
+    
+    # Split by sentence endings first
+    # Simple split by common punctuation
+    sentences = text.replace("?", "?|").replace("!", "!|").replace(".", ".|").split("|")
+    
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+            
+        # If adding this sentence exceeds max length, push current chunk
+        if len(current_chunk) + len(sentence) > max_length:
+            if current_chunk:
+                chunks.append(current_chunk)
+            current_chunk = sentence
+        else:
+            if current_chunk:
+                current_chunk += " " + sentence
+            else:
+                current_chunk = sentence
+    
+    if current_chunk:
+        chunks.append(current_chunk)
+        
+    return chunks
+
+async def generate_with_qwen(script: DialogueScript) -> str:
+    """Generate audio using QwenTTSHandler."""
+    handler = QwenTTSHandler()
+    combined_audio = AudioSegment.empty()
+    
+    print(f"[QwenTTS] Starting generation for {len(script.lines)} lines")
+    
+    temp_files = []
+    
+    try:
+        for i, line in enumerate(script.lines):
+            ref_audio = get_reference_audio(line.speaker)
+            # Use strict text to avoid empty generation issues
+            text = line.text.strip()
+            if not text:
+                continue
+            
+            # Split long text into semantic chunks for better pacing
+            chunks = split_text_into_chunks(text)
+            
+            print(f"[QwenTTS] Processing line {i+1} ({len(chunks)} chunks): {text[:30]}...")
+            
+            line_audio = AudioSegment.empty()
+            
+            for j, chunk in enumerate(chunks):
+                if not chunk.strip():
+                    continue
+                    
+                wav_path = await handler.generate(chunk, ref_audio)
+                
+                if wav_path and os.path.exists(wav_path):
+                    segment = AudioSegment.from_wav(wav_path)
+                    line_audio += segment
+                    # Short pause between sentences within a line
+                    if j < len(chunks) - 1:
+                        line_audio += AudioSegment.silent(duration=150)
+                    temp_files.append(wav_path)
+                else:
+                    print(f"[QwenTTS] Warning: No audio generated for chunk {j+1} of line {i+1}")
+            
+            if len(line_audio) > 0:
+                combined_audio += line_audio
+                # Add pause between dialogue lines
+                combined_audio += AudioSegment.silent(duration=400) 
+            
+    except Exception as e:
+        print(f"[QwenTTS] Error during generation loop: {e}")
+        # Clean up temp files
+        for f in temp_files:
+            if os.path.exists(f):
+                os.remove(f)
+        raise e
+
+    # Clean up temp files
+    for f in temp_files:
+        if os.path.exists(f):
+            os.remove(f)
+            
+    # Save combined output
+    filename = f"{uuid.uuid4()}.mp3"
+    output_dir = "./data/audio"
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, filename)
+    
+    print(f"[QwenTTS] Exporting combined audio to {output_path}")
+    combined_audio.export(output_path, format="mp3")
+    
+    # Upload to Supabase if enabled
+    if storage_client.is_enabled():
+        try:
+            print(f"[INFO] Uploading audio to Supabase: {filename}")
+            audio_url = storage_client.upload_audio(output_path, filename)
+            
+            # Clean up local file
+            if os.path.exists(output_path):
+                os.remove(output_path)
+            
+            return audio_url
+        except Exception as e:
+            print(f"[ERROR] Upload failed, keeping local file: {e}")
+            
+    return output_path
 
 @router.post("/generate", response_model=PodcastEpisode)
 async def generate_episode(request: ProcessingRequest):
@@ -37,26 +169,35 @@ async def generate_episode(request: ProcessingRequest):
         raise HTTPException(status_code=400, detail="No valid sources provided.")
 
     try:
-        # Normalize TTS engine name for Podcastfy
-        tts_engine = request.tts_engine
-        if tts_engine == "edge-tts":
-            tts_engine = "edge"
-        elif not tts_engine:
-            tts_engine = "edge"
-            
-        # Generate podcast using Podcastfy
-        audio_path, script = await asyncio.to_thread(
-            podcastfy_client.generate_from_urls,
-            urls,
-            tts_engine
-        )
+        # Normalize TTS engine name
+        tts_engine = request.tts_engine or "edge"
         
-        # Sanitize path for URL usage (remove leading ./)
-        # Sanitize path for URL usage (remove leading ./)
+        # 1. Generate Script first (we need script to pass to Qwen if selected)
+        # Using podcastfy just for script generation is safer if we want to intercept TTS
+        
+        if tts_engine == "qwen":
+            # Generate script only
+            script = await asyncio.to_thread(
+                podcastfy_client.generate_script_only,
+                urls=urls
+            )
+            # Generate Audio with Qwen
+            audio_path = await generate_with_qwen(script)
+        else:
+            # Use original flow (Edge TTS via Podcastfy)
+            if tts_engine == "edge-tts": 
+                tts_engine = "edge"
+                
+            audio_path, script = await asyncio.to_thread(
+                podcastfy_client.generate_from_urls,
+                urls,
+                tts_engine
+            )
+        
+        # Sanitize path
         if audio_path:
             if audio_path.startswith("./"):
                 audio_path = audio_path[2:]
-            # If it's a full URL (Supabase), keep it as is
             
         print(f"[INFO] Podcast generated: {audio_path}")
         
@@ -68,7 +209,7 @@ async def generate_episode(request: ProcessingRequest):
         file_path=audio_path,
         metadata=PodcastMetadata(
             title=script.title,
-            duration_seconds=0.0,  # TODO: Calculate duration
+            duration_seconds=0.0,
             sources=source_names,
             created_at=datetime.now()
         ),
@@ -91,7 +232,6 @@ async def list_episodes():
 async def generate_script_only(request: ProcessingRequest):
     """
     Generate a podcast script from the provided sources without generating audio.
-    This allows users to preview and edit the script before TTS generation.
     """
     print(f"[DEBUG] Script-only generation: sources={len(request.sources)}")
     
@@ -119,7 +259,6 @@ async def generate_script_only(request: ProcessingRequest):
 async def generate_audio_from_script(request: AudioFromScriptRequest):
     """
     Generate audio from an existing script using TTS.
-    This is the second step after script preview/editing.
     """
     print(f"[DEBUG] Audio generation from script: title={request.script.title}, lines={len(request.script.lines)}")
     
@@ -128,11 +267,18 @@ async def generate_audio_from_script(request: AudioFromScriptRequest):
 
     try:
         tts_engine = request.tts_engine or "edge"
-        audio_path = await asyncio.to_thread(
-            podcastfy_client.generate_audio_from_script,
-            request.script,
-            tts_engine
-        )
+        
+        if tts_engine == "qwen":
+            audio_path = await generate_with_qwen(request.script)
+        else:
+            if tts_engine == "edge-tts":
+                tts_engine = "edge"
+            audio_path = await asyncio.to_thread(
+                podcastfy_client.generate_audio_from_script,
+                request.script,
+                tts_engine
+            )
+            
         print(f"[INFO] Audio generated: {audio_path}")
     except Exception as e:
         print(f"[ERROR] Audio generation failed: {e}")
@@ -180,13 +326,18 @@ async def run_tts_task(task_id: str, script: DialogueScript, engine_name: Option
     try:
         task.set_status("running")
         
-        # Use Podcastfy for audio generation
         tts_engine = engine_name or "edge"
-        audio_path = await asyncio.to_thread(
-            podcastfy_client.generate_audio_from_script,
-            script,
-            tts_engine
-        )
+        
+        if tts_engine == "qwen":
+            audio_path = await generate_with_qwen(script)
+        else:
+            if tts_engine == "edge-tts":
+                tts_engine = "edge"
+            audio_path = await asyncio.to_thread(
+                podcastfy_client.generate_audio_from_script,
+                script,
+                tts_engine
+            )
         
         if task.status == "cancelled":
             print(f"[Task {task_id}] Task was cancelled, ignoring result.")
@@ -197,6 +348,8 @@ async def run_tts_task(task_id: str, script: DialogueScript, engine_name: Option
         task.progress = 1.0
         
     except Exception as e:
+        print(f"[Task {task_id}] Failed: {e}")
+        task.error = str(e)
         task.set_status("failed")
 
 
