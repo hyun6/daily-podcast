@@ -3,9 +3,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../cubits/generation/generation_cubit.dart';
 import '../cubits/generation/generation_state.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -22,17 +27,52 @@ class SettingsScreen extends StatelessWidget {
               ),
               ListTile(
                 title: const Text("TTS Engine"),
-                subtitle: Text("Current: ${cubit.ttsEngine}"),
-                trailing: const Icon(Icons.check_circle, color: Colors.green),
-                onTap: () {
-                  // Example to toggle engine
-                  // cubit.setTtsEngine('other-engine');
-                },
+                subtitle: Text(
+                  cubit.ttsEngine == 'qwen'
+                      ? 'Qwen TTS (Local, High Quality)'
+                      : 'Edge TTS (Fast, Cloud)',
+                ),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                onTap: () => _showEngineSelectionDialog(context, cubit),
               ),
             ],
           );
         },
       ),
+    );
+  }
+
+  void _showEngineSelectionDialog(BuildContext context, GenerationCubit cubit) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Select TTS Engine'),
+          content: RadioGroup<String>(
+            groupValue: cubit.ttsEngine,
+            onChanged: (value) {
+              if (value != null) {
+                cubit.setTtsEngine(value);
+                setState(() {}); // Rebuild to update subtitle
+                Navigator.pop(context);
+              }
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RadioListTile<String>(
+                  title: const Text('Edge TTS (Fast, Cloud)'),
+                  value: 'edge-tts',
+                ),
+                RadioListTile<String>(
+                  title: const Text('Qwen TTS (Local, High Quality)'),
+                  value: 'qwen',
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

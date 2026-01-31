@@ -5,6 +5,8 @@ import '../../models/podcast.dart';
 import '../../models/dialogue_script.dart';
 import 'generation_state.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 class GenerationCubit extends Cubit<GenerationState> {
   final PodcastRepository _podcastRepository;
   final ScriptRepository _scriptRepository;
@@ -18,10 +20,19 @@ class GenerationCubit extends Cubit<GenerationState> {
     required ScriptRepository scriptRepository,
   }) : _podcastRepository = podcastRepository,
        _scriptRepository = scriptRepository,
-       super(GenerationInitial());
+       super(GenerationInitial()) {
+    _loadSettings();
+  }
 
-  void setTtsEngine(String engine) {
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    _ttsEngine = prefs.getString('tts_engine') ?? 'edge-tts';
+  }
+
+  void setTtsEngine(String engine) async {
     _ttsEngine = engine;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('tts_engine', engine);
   }
 
   String get ttsEngine => _ttsEngine;
