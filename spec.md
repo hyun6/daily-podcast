@@ -1,40 +1,20 @@
-# 에피소드 삭제 기능 추가
+# 설정 화면 리팩토링 (RadioGroup 도입)
 
 ## 개요
-Flutter 앱 내부와 서버에서 생성된 팟캐스트 에피소드를 삭제하는 기능을 추가한다.
-사용자가 앱의 "Recent Episodes" 리스트에서 삭제 버튼을 누르면, 해당 파일이 서버(로컬 또는 Supabase)에서 제거되고 앱의 리스트에서도 사라져야 한다.
+`SettingsScreen`에서 발생하는 `RadioListTile`의 `groupValue` 및 `onChanged` 속성 Deprecation 경고를 해결한다.
+Flutter의 최신 권장 사항에 따라 `RadioGroup` 위젯을 도입하여 라디오 버튼 그룹 상태를 관리하도록 리팩토링한다.
 
-## Backend 변경 사항
+## 문제 상황
+- `RadioListTile` 사용 시 `groupValue`와 `onChanged` 속성이 Deprecated됨.
+- 경고 메시지: `'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead.`
 
-### API Endpoint
-- **Method**: `DELETE`
-- **Path**: `/api/v1/episodes/{filename}`
-- **Description**: 지정된 파일명의 에피소드를 삭제한다.
-- **Parameters**:
-    - `filename`: 삭제할 파일 이름 (예: `episode_123.mp3`)
+## 해결 방안
+1. `SettingsScreen`의 `_showEngineSelectionDialog` 메서드 내 `RadioListTile`들을 감싸는 `Column` 상위에 `RadioGroup` 위젯을 추가한다.
+2. `RadioListTile`에서 `groupValue`와 `onChanged` 속성을 제거하고, `RadioGroup`에서 통합 관리한다.
+3. `RadioGroup`의 `onChanged` 콜백에서 `GenerationCubit`의 상태를 업데이트하고 다이얼로그를 닫는 로직을 구현한다.
 
-### Logic
-1. `data/audio` 디렉토리에서 해당 파일 존재 여부 확인 후 삭제.
-2. Supabase가 활성화되어 있다면 `StorageClient`를 통해 Supabase Storage에서도 삭제 시도.
-3. 성공 시 200 OK, 실패 시 500 또는 404 반환.
-
-## Frontend 변경 사항
-
-### Data Repository
-- `PodcastRepository` 인터페이스에 `deleteEpisode(String filePath)` 메서드 추가.
-- `RealPodcastRepository` 구현:
-    - `filePath` URL에서 실제 파일명(filename)을 추출.
-    - `DELETE /api/v1/episodes/{filename}` 호출.
-- `MockPodcastRepository` 구현: 로컬 리스트에서 제거하는 흉내.
-
-### Provider
-- `PodcastProvider`에 `deleteEpisode(Podcast podcast)` 메서드 추가.
-    - Repository 호출 성공 시 `_recentPodcasts` 리스트에서 해당 객체 제거 및 `notifyListeners()`.
-
-### UI (HomeScreen)
-- `Recent Episodes` 리스트 아이템(`ListTile`)에 Trailing Icon Button(휴지통 아이콘) 추가.
-- 클릭 시 확인 다이얼로그(Optional) 후 삭제 실행.
-
-## 고려 사항
-- 파일명 추출: `filePath`가 전체 URL로 되어 있으므로, 마지막 `/` 뒤의 부분을 파일명으로 간주한다.
-- 동기화: 서버에서 삭제된 후 앱 상태를 업데이트한다.
+## 변경 사항
+- **File**: `app/lib/screens/settings_screen.dart`
+- **Logic**:
+    - `RadioGroup` 위젯 사용.
+    - TTS 엔진 선택 로직을 `RadioGroup.onChanged`로 이동.
