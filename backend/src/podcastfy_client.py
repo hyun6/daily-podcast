@@ -15,6 +15,8 @@ from src.models import DialogueScript, DialogueLine
 from src.config import settings
 from src.storage_client import storage_client
 import uuid
+from unittest.mock import patch
+from podcastfy.utils.config import load_config as original_load_config
 
 
 class PodcastfyClient:
@@ -29,7 +31,7 @@ class PodcastfyClient:
         self.transcript_dir = "./data/transcripts"
         self.audio_dir = "./data/audio"
         
-        # 한국어 EdgeTTS 설정
+        # 한국어 EdgeTTS 설정 (Prompt Optimization)
         self.conversation_config = {
             "output_language": "Korean",
             "podcast_name": "일일 팟캐스트",
@@ -37,6 +39,8 @@ class PodcastfyClient:
             "conversation_style": ["engaging", "conversational", "informative"],
             "roles_person1": "main host who explains topics clearly",
             "roles_person2": "curious co-host who asks questions",
+            "dialogue_structure": ["Introduction", "Deep Dive", "Conclusion"], # Ensure structure
+            "engagement_techniques": ["Use <Person1> and <Person2> tags for every single line of dialogue."], # FORCE XML format
             "ending_message": "오늘의 팟캐스트를 들어주셔서 감사합니다!",
             "text_to_speech": {
                 "default_tts_model": "edge",
@@ -54,6 +58,17 @@ class PodcastfyClient:
             "Person1": "Host A",
             "Person2": "Host B"
         }
+
+    def _get_patched_config(self):
+        """Gemini 모델을 강제로 설정하는 Config 객체 반환"""
+        config = original_load_config()
+        # content_generator가 없으면 생성, 있으면 업데이트
+        if 'content_generator' not in config.config:
+            config.config['content_generator'] = {}
+        config.config['content_generator']['gemini_model'] = "gemini-2.0-flash"
+        # 속성 업데이트 (Config 클래스 내부 로직 반영)
+        config._set_attributes()
+        return config
     
     def generate_from_urls(
         self, 
@@ -76,12 +91,13 @@ class PodcastfyClient:
         if jina_key:
             print(f"[DEBUG] JINA_API_KEY prefix: {jina_key[:4]}...")
 
-        audio_file = generate_podcast(
-            urls=urls,
-            conversation_config=self.conversation_config,
-            tts_model=tts_engine,
-            llm_model_name="gemini-flash-latest"
-        )
+        # Patch load_config to force Gemini Flash model
+        with patch('podcastfy.content_generator.load_config', side_effect=self._get_patched_config):
+            audio_file = generate_podcast(
+                urls=urls,
+                conversation_config=self.conversation_config,
+                tts_model=tts_engine,
+            )
         
         
         # 가장 최근 transcript 파일 찾기
@@ -112,22 +128,7 @@ class PodcastfyClient:
         text: str,
         tts_engine: Optional[str] = "edge"
     ) -> Tuple[str, DialogueScript]:
-        """
-        텍스트에서 팟캐스트 생성
-        
-        Args:
-            text: 원본 텍스트 콘텐츠
-            tts_engine: TTS 엔진
-        
-        Returns:
-            tuple: (오디오 파일 경로, DialogueScript)
-        """
-        audio_file = generate_podcast(
-            text=text,
-            conversation_config=self.conversation_config,
-            tts_model=tts_engine,
-            llm_model_name="gemini-flash-latest"
-        )
+        raise NotImplementedError("Direct text input not supported by installed podcastfy version")
         
         transcript_path = self._find_latest_transcript()
         script = self._parse_transcript(transcript_path)
@@ -162,13 +163,13 @@ class PodcastfyClient:
         Returns:
             DialogueScript: 변환된 대본
         """
-        generate_podcast(
-            urls=urls,
-            text=text,
-            conversation_config=self.conversation_config,
-            transcript_only=True,
-            llm_model_name="gemini-flash-latest"
-        )
+        # Patch load_config to force Gemini Flash model
+        with patch('podcastfy.content_generator.load_config', side_effect=self._get_patched_config):
+            generate_podcast(
+                urls=urls,
+                conversation_config=self.conversation_config,
+                transcript_only=True,
+            )
         
         transcript_path = self._find_latest_transcript()
         return self._parse_transcript(transcript_path)
@@ -192,10 +193,18 @@ class PodcastfyClient:
         transcript_text = self._script_to_transcript(script)
         
         # Podcastfy는 transcript 파일에서 직접 오디오 생성 지원
+        # Prepare config to override model name
+        config = {
+            "llm": {
+                "model_name": "gemini-1.5-flash"
+            }
+        }
+
         audio_file = generate_podcast(
             transcript_file=self._save_temp_transcript(transcript_text),
             conversation_config=self.conversation_config,
-            tts_model=tts_engine
+            tts_model=tts_engine,
+            config=config
         )
         
         # Supabase Storage가 활성화되어 있으면 업로드

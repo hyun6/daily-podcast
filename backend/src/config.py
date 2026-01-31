@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     # API Keys & External Services
     GEMINI_API_KEY: str = Field("TODO", description="Google Gemini API Key")
-    JINA_API_KEY: str = Field(None, description="Jina AI API Key (required for Podcastfy web scraping)")
+    JINA_API_KEY: str | None = Field(None, description="Jina AI API Key (required for Podcastfy web scraping)")
     
     # Supabase (Optional - for cloud storage)
     SUPABASE_URL: str = Field("", description="Supabase Project URL")
@@ -21,9 +21,13 @@ class Settings(BaseSettings):
     DOWNLOADS_DIR: str = "downloads"
 
     # Audio Configuration
-    TTS_ENGINE: Literal["edge-tts", "openai", "elevenlabs"] = Field(
+    TTS_ENGINE: Literal["edge-tts", "openai", "elevenlabs", "qwen"] = Field(
         default="edge-tts", 
         description="Text-to-Speech Engine to use"
+    )
+    QWEN_MODEL_ID: str = Field(
+        default="Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+        description="Qwen Model ID for local TTS"
     )
 
     class Config:
